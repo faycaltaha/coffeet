@@ -182,7 +182,7 @@
     },
     {
       "parameters": {
-        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=CAFE&dep_code__exact=75&page={{ $json.page }}&page_size=20",
+        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=CAFE&Code_postal__startswith=75&page={{ $json.page }}&page_size=20",
         "options": {}
       },
       "id": "b7f735cf-2f38-450c-9707-a56279319404",
@@ -193,7 +193,7 @@
     },
     {
       "parameters": {
-        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&dep_code__exact=75&page={{ $json.page }}&page_size=20",
+        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&Code_postal__startswith=75&page={{ $json.page }}&page_size=20",
         "options": {}
       },
       "id": "83fb4be7-405d-4bdf-8eda-18f932a191ed",
