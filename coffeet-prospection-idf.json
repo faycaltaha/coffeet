@@ -229,7 +229,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer YOUR_NOTION_API_TOKEN"
+              "value": "Bearer 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"
             },
             {
               "name": "Notion-Version",
@@ -301,7 +301,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer YOUR_OPENROUTER_API_KEY"
+              "value": "Bearer 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"
             },
             {
               "name": "Content-Type",
@@ -347,7 +347,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer YOUR_NOTION_API_TOKEN"
+              "value": "Bearer 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"
             },
             {
               "name": "Notion-Version",
