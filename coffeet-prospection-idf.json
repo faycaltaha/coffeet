@@ -1,0 +1,374 @@
+{
+  "name": "☕ Coffee T — Prospection IDF v10",
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Page du jour",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Page du jour": {
+      "main": [
+        [
+          {
+            "node": "Fetch CAF",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch COFFEE",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notion — Lire existants",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CAF": {
+      "main": [
+        [
+          {
+            "node": "Fusionner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch COFFEE": {
+      "main": [
+        [
+          {
+            "node": "Fusionner",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fusionner": {
+      "main": [
+        [
+          {
+            "node": "Filtrer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrer": {
+      "main": [
+        [
+          {
+            "node": "Merge Notion+Filtrer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion — Lire existants": {
+      "main": [
+        [
+          {
+            "node": "Merge Notion+Filtrer",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Notion+Filtrer": {
+      "main": [
+        [
+          {
+            "node": "Anti-doublons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anti-doublons": {
+      "main": [
+        [
+          {
+            "node": "Skip si vide ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip si vide ?": {
+      "main": [
+        [
+          {
+            "node": "OpenRouter — Mistral",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "OpenRouter — Mistral": {
+      "main": [
+        [
+          {
+            "node": "Parser mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser mail": {
+      "main": [
+        [
+          {
+            "node": "Notion — Créer page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "a68ecec4-4b9e-4ac1-a2cf-19b1ae90f2ed",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [720, 4960]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calcule un offset déterministe basé sur la date du jour\n// pour parcourir le dataset sans répéter les mêmes pages\nconst today = new Date();\nconst seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();\nconst offset = (seed % 50) * 20; // 0 à 980, couvre jusqu'à 1000 entrées\nconst page = Math.floor(offset / 20) + 1;\nreturn [{ json: { offset, page, date: today.toISOString().split('T')[0] } }];"
+      },
+      "id": "d2a9d743-2bb1-40af-bea2-c46ffe07670d",
+      "name": "Page du jour",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [944, 4960]
+    },
+    {
+      "parameters": {
+        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=CAFE&dep_code__exact=75&page={{ $json.page }}&page_size=20",
+        "options": {}
+      },
+      "id": "b7f735cf-2f38-450c-9707-a56279319404",
+      "name": "Fetch CAF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1168, 4768]
+    },
+    {
+      "parameters": {
+        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&dep_code__exact=75&page={{ $json.page }}&page_size=20",
+        "options": {}
+      },
+      "id": "83fb4be7-405d-4bdf-8eda-18f932a191ed",
+      "name": "Fetch COFFEE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1168, 4960]
+    },
+    {
+      "parameters": {},
+      "id": "d4621341-b037-4934-b1b2-947b2a2123a7",
+      "name": "Fusionner",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1392, 4864]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Blacklist : chaînes, fast-food, grandes surfaces, hôpitaux\nconst BLACKLIST = [\n  'STARBUCKS', 'COLUMBUS', 'MCDONALD', 'CAFETERIA', 'CASINO',\n  'MONOPRIX', 'FRANPRIX', 'CARREFOUR', 'LECLERC', 'RELAY',\n  'HOPITAL', 'EHPAD', 'WOK', 'SUSHI', 'PIZZA', 'BURGER', 'KEBAB',\n  'SUBWAY', 'QUICK', 'KFC', 'FLUNCH', 'COURTEPAILLE', 'HIPPOPOTAMUS',\n  'PLANET', 'DOMINO', 'FIVE GUYS', 'LEON', 'COJEAN', 'RAMEN'\n];\n\n// Whitelist activité : établissements susceptibles d'acheter du café specialty\nconst WHITELIST_ACTIVITE = [\n  'caf', 'coffee', 'torréf', 'salon de thé', 'tea room',\n  'barista', 'brûlerie', 'brulerie', 'espresso', 'brunch', 'restaur',\n  'brasserie', 'bistro', 'bar', 'hôtel', 'hotel', 'epicerie', 'épicerie'\n];\n\nconst all = $input.all();\nconst seen = new Set();\nconst result = [];\n\nfor (const item of all) {\n  // Le tabular API data.gouv retourne les enregistrements dans \"data\"\n  const records = item.json?.data || item.json?.results || [];\n\n  for (const r of records) {\n    const name     = (r.APP_Libelle_etablissement || '').trim();\n    const activite = (r.APP_Libelle_activite_etablissement || '').toLowerCase();\n    // Adresse_2_UA est le champ adresse du dataset Alim'confiance\n    // On garde un fallback sur Adresse_etablissement si absent\n    const adresse  = (r.Adresse_2_UA || r.Adresse_etablissement || '').trim();\n    const cp       = (r.Code_postal || '').toString().trim();\n    const commune  = (r.Libelle_commune || '').trim();\n    const siret    = (r.SIRET || '').toString().trim();\n    const dep      = (r.dep_code || '').toString().trim();\n    const note     = (r.Synthese_eval_sanit || '');\n\n    // Filtres d'exclusion\n    if (!name || name.length < 3) continue;\n    if (dep !== '75') continue; // Sécurité, même si l'URL filtre déjà\n    if (note === 'A améliorer') continue; // Mauvaise note sanitaire\n\n    const nameUp = name.toUpperCase();\n    if (BLACKLIST.some(b => nameUp.includes(b))) continue;\n\n    // Au moins une activité doit correspondre à la whitelist\n    const activiteOK = WHITELIST_ACTIVITE.some(w => activite.includes(w));\n    if (!activiteOK) continue;\n\n    // Déduplication intra-batch sur les 10 premiers caractères alphanum du nom\n    const key = nameUp.replace(/[^A-Z0-9]/g, '').substring(0, 10);\n    if (seen.has(key)) continue;\n    seen.add(key);\n\n    result.push({\n      nom: name,\n      adresse,\n      code_postal: cp,\n      commune,\n      activite: r.APP_Libelle_activite_etablissement || '',\n      siret,\n      dep,\n      key\n    });\n  }\n}\n\nconsole.log('Résultats après filtre:', result.length);\n\nif (result.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\nreturn result.slice(0, 15).map(r => ({ json: r }));"
+      },
+      "id": "a3d27983-2b88-4ba9-bc6e-0ebbb3a0af2b",
+      "name": "Filtrer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1616, 4864]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/8aa6d741-7872-47d0-94b9-6ac4bc8039f6/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_NOTION_API_TOKEN"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"page_size\": 100 }",
+        "options": {}
+      },
+      "id": "82fd2b0f-e70a-4a22-b36e-5b3759378f14",
+      "name": "Notion — Lire existants",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1616, 5128]
+    },
+    {
+      "parameters": {},
+      "id": "292b6fe5-c227-47b8-a170-35e70d1786b6",
+      "name": "Merge Notion+Filtrer",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1840, 4960]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sépare les candidats (issus de Filtrer, ont un champ 'key')\n// des données Notion (réponse API, ont un champ 'results')\nconst allItems = $input.all();\nconst candidats    = allItems.filter(i => i.json.key);\nconst notionItems  = allItems.filter(i => !i.json.key);\n\n// Construit le Set des noms déjà présents dans Notion\nconst existing = new Set();\nfor (const item of notionItems) {\n  const results = item.json?.results || [];\n  for (const r of results) {\n    const t = r.properties?.Nom?.title?.[0]?.plain_text || '';\n    if (t) {\n      existing.add(t.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10));\n    }\n  }\n}\n\n// Garde uniquement les candidats absents de Notion\nconst seen     = new Set();\nconst nouveaux = [];\nfor (const item of candidats) {\n  const k = item.json.key;\n  if (!existing.has(k) && !seen.has(k)) {\n    seen.add(k);\n    nouveaux.push({ json: item.json });\n  }\n}\n\nconsole.log('Nouveaux prospects:', nouveaux.length);\n\nif (nouveaux.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\nreturn nouveaux.slice(0, 10);"
+      },
+      "id": "9349fd0d-a8a2-45cb-98dd-bd3b8736a387",
+      "name": "Anti-doublons",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2064, 4960]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json._skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c600a3be-b9c4-41db-8c50-e5aa970e1548",
+      "name": "Skip si vide ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2288, 4960]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENROUTER_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://coffee-t.fr"
+            },
+            {
+              "name": "X-Title",
+              "value": "Coffee T Prospection"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"mistralai/mistral-small-3.1-24b-instruct\",\n  \"max_tokens\": 500,\n  \"temperature\": 0.85,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Tu es Fayçal TAHA, fondateur de Coffee T, importateur de café est-africain de spécialité basé à Paris. 10 ans d'expérience sourcing café.\\n\\nCAFÉ SEV Africa (Istanbul) : Éthiopie, Kenya, Uganda, Tanzania, Rwanda. Haute altitude, sol volcanique, petites batches, traçabilité directe producteur. Notes chocolat riche, agrumes vifs, épices chaudes. Grade 3 Natural éthiopien : doux, propre, pas sur-fermenté.\\n\\nRÈGLES ABSOLUES :\\nZéro tiret long. Zéro liste. Zéro 'je me permets'. Zéro flatterie. Phrases courtes. Ton humain direct. Max 4 paragraphes.\\n\\nFORMAT STRICT :\\nObjet : [max 8 mots]\\n\\nBonjour,\\n\\n[paragraphe 1]\\n\\n[paragraphe 2]\\n\\n[paragraphe 3 optionnel]\\n\\nRéservez 15 minutes ici : https://calendly.com/faycaltaha-coffeet/15min\\n\\nFayçal TAHA\\nFondateur, Coffee T\\nfaycaltaha@coffeet.fr\\n\\nRéponds UNIQUEMENT avec le mail. Rien avant, rien après.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Établissement : {{ $json.nom }}\\nVille : {{ $json.commune }}\\nActivité : {{ $json.activite }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "6744f742-c2fa-4c53-ad99-d0ec963dae74",
+      "name": "OpenRouter — Mistral",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2512, 4960]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Récupère la réponse IA et les données du prospect\nconst aiResponse = $('OpenRouter — Mistral').item.json;\nconst text = aiResponse?.choices?.[0]?.message?.content || '';\n\n// Parse l'objet et le corps du mail\nconst lines = text.split('\\n').map(l => l.trim()).filter(Boolean);\nlet objet = '';\nconst bodyLines = [];\nlet headerParsed = false;\n\nfor (const line of lines) {\n  if (!headerParsed && /^objet\\s*:/i.test(line)) {\n    objet = line.replace(/^objet\\s*:\\s*/i, '').trim();\n    headerParsed = true;\n  } else if (headerParsed) {\n    bodyLines.push(line);\n  }\n}\n\n// Fallback si l'IA n'a pas respecté le format\nif (!objet) {\n  objet = 'Café éthiopien pour votre établissement';\n  bodyLines.push(...lines);\n}\n\n// Données du prospect (item courant = issu de Anti-doublons via OpenRouter)\nconst p = $('Anti-doublons').item.json;\nconst adresseComplete = [\n  p.adresse || '',\n  p.code_postal || '',\n  p.commune || ''\n].filter(Boolean).join(', ').substring(0, 200);\n\nconst notes = [\n  p.siret ? 'SIRET: ' + p.siret : '',\n  p.activite || '',\n  p.dep ? 'Dep: ' + p.dep : ''\n].filter(Boolean).join(' | ').substring(0, 200);\n\n// Construit le body Notion comme objet (pas de stringify ici)\nconst notionBody = {\n  parent: { database_id: '8aa6d741-7872-47d0-94b9-6ac4bc8039f6' },\n  properties: {\n    'Nom': {\n      title: [{ text: { content: (p.nom || '').substring(0, 100) } }]\n    },\n    'Adresse': {\n      rich_text: [{ text: { content: adresseComplete } }]\n    },\n    'Catégorie': {\n      select: { name: 'Cool & Trendy' }\n    },\n    'Score Pertinence': {\n      number: 7\n    },\n    'Statut Email': {\n      select: { name: 'À envoyer' }\n    },\n    'Notes': {\n      rich_text: [{ text: { content: notes } }]\n    }\n  },\n  children: [\n    {\n      object: 'block',\n      type: 'callout',\n      callout: {\n        rich_text: [{\n          type: 'text',\n          text: { content: ('Objet : ' + objet).substring(0, 200) }\n        }],\n        icon: { emoji: '📧' },\n        color: 'blue_background'\n      }\n    },\n    {\n      object: 'block',\n      type: 'paragraph',\n      paragraph: {\n        rich_text: [{\n          type: 'text',\n          text: { content: bodyLines.join('\\n').substring(0, 2000) }\n        }]\n      }\n    }\n  ]\n};\n\nreturn [{ json: { notionBody } }];"
+      },
+      "id": "431fea34-4282-420f-a1af-c4d2272921b9",
+      "name": "Parser mail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2736, 4960]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_NOTION_API_TOKEN"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.notionBody }}",
+        "options": {}
+      },
+      "id": "53af2b19-3935-4e53-9238-382391bdee11",
+      "name": "Notion — Créer page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2960, 4960]
+    }
+  ]
+}
