@@ -31,11 +31,11 @@
     },
     "Skip si vide ?": {
       "main": [
-        [{"node": "Chercher site web", "type": "main", "index": 0}],
+        [{"node": "Enrichir SIRENE", "type": "main", "index": 0}],
         []
       ]
     },
-    "Chercher site web": {
+    "Enrichir SIRENE": {
       "main": [[{"node": "Extraire contexte", "type": "main", "index": 0}]]
     },
     "Extraire contexte": {
@@ -139,16 +139,9 @@
     },
     {
       "parameters": {
-        "url": "=https://s.jina.ai/{{ encodeURIComponent($json.nom + ' ' + $json.commune + ' ' + $json.typeProspect + ' site officiel Paris') }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {"name": "Accept", "value": "text/plain"},
-            {"name": "X-No-Cache", "value": "true"}
-          ]
-        },
+        "url": "=https://recherche-entreprises.api.gouv.fr/search?q={{ encodeURIComponent($json.nom) }}&per_page=3",
         "options": {
-          "timeout": 15000,
+          "timeout": 10000,
           "response": {
             "response": {
               "neverError": true
@@ -157,14 +150,14 @@
         }
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000008",
-      "name": "Chercher site web",
+      "name": "Enrichir SIRENE",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [1440, 70]
     },
     {
       "parameters": {
-        "jsCode": "const prospect = $('Anti-doublons').item.json;\n\nconst jinaRaw = $json;\nlet rawText = '';\n\nif (typeof jinaRaw === 'string') {\n  rawText = jinaRaw;\n} else if (jinaRaw?.body) {\n  rawText = typeof jinaRaw.body === 'string' ? jinaRaw.body : JSON.stringify(jinaRaw.body);\n} else {\n  rawText = JSON.stringify(jinaRaw);\n}\n\nlet webContext = rawText\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/https?:\\/\\/[^\\s]+/g, '')\n  .replace(/\\[.*?\\]\\(.*?\\)/g, '')\n  .replace(/#{1,6}\\s/g, '')\n  .replace(/[\\r\\n]+/g, ' ')\n  .replace(/\\s{2,}/g, ' ')\n  .replace(/\"/g, \"'\")\n  .trim()\n  .substring(0, 1200);\n\nif (!webContext || webContext.length < 30) {\n  webContext = `${prospect.typeProspect} ${prospect.nom} à ${prospect.commune}. Activité : ${prospect.activite}. Pas d'info web disponible.`;\n}\n\nreturn [{ json: { ...prospect, webContext } }];"
+        "jsCode": "const prospect = $('Anti-doublons').item.json;\nconst sirene = $json;\n\nlet dirigeant = '';\nlet webContext = '';\n\ntry {\n  const results = sirene?.results || [];\n\n  // Cherche le résultat qui correspond le mieux au nom du prospect\n  const prospectKey = prospect.nom.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 8);\n  const match = results.find(r => {\n    const k = (r.nom_complet || '').toUpperCase().replace(/[^A-Z0-9]/g, '');\n    return k.includes(prospectKey) || prospectKey.includes(k.substring(0, 6));\n  }) || results[0];\n\n  if (match) {\n    // Dirigeant principal (gérant, président, directeur...)\n    const dir = match.dirigeants?.find(d => d.qualite && /gérant|président|directeur|associé/i.test(d.qualite))\n              || match.dirigeants?.[0];\n    if (dir) {\n      const prenom = (dir.prenoms || '').split(' ')[0];\n      const nom = dir.nom || '';\n      dirigeant = [prenom, nom].filter(Boolean).join(' ');\n    }\n\n    const annee = match.date_creation ? match.date_creation.substring(0, 4) : '';\n    const categorie = match.categorie_entreprise || '';\n    const activiteLib = match.siege?.libelle_activite_principale || '';\n    const nbEtab = match.nombre_etablissements_ouverts;\n\n    const parts = [\n      dirigeant ? `Dirigeant : ${dirigeant}` : '',\n      annee ? `Créé en ${annee}` : '',\n      categorie ? `Taille : ${categorie}` : '',\n      activiteLib ? `Activité NAF : ${activiteLib}` : '',\n      nbEtab > 1 ? `${nbEtab} établissements` : ''\n    ].filter(Boolean);\n\n    webContext = parts.join(' | ');\n  }\n} catch(e) {\n  webContext = '';\n}\n\nif (!webContext) {\n  webContext = `${prospect.typeProspect} — ${prospect.nom} à ${prospect.commune}. Activité : ${prospect.activite}.`;\n}\n\nreturn [{ json: { ...prospect, webContext, dirigeant } }];"
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000009",
       "name": "Extraire contexte",
@@ -187,7 +180,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"mistralai/mistral-small-3.1-24b-instruct\",\n  \"max_tokens\": 600,\n  \"temperature\": 0.92,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Tu es Fayçal TAHA, fondateur de Coffee T. Tu importes directement des cafés de spécialité d'Afrique de l'Est depuis 10 ans. Tu travailles avec SEV Africa (Istanbul) sur des micro-lots à haute altitude : Éthiopie, Kenya, Rwanda.\\n\\nPRODUIT PHARE : Grade 3 Natural 100% arabica éthiopien. Récolte sélective, séchage sur lits africains, traçabilité directe producteur. Notes chocolat noir, orange sanguine, épices douces. Propre, rond, jamais sur-fermenté. Prix de vente B2B : environ 30€/kg.\\n\\nANGLE SELON LE TYPE DE PROSPECT (fourni dans le message utilisateur) :\\n- TORRÉFACTEUR ou BRÛLERIE : tu proposes du café vert (green coffee) de qualité exceptionnelle pour qu'ils puissent le torréfier à leur façon. Argument clé : un lot exclusif à leur carte, traçable jusqu'au producteur, que leurs clients ne trouveront nulle part ailleurs.\\n- COFFEE SHOP : tu proposes le café torréfié prêt à extraire. Argument clé : un arabica single origin à la hauteur de leur niveau barista, qui justifie un pricing premium à la tasse.\\n- HÔTEL : tu proposes un café de spécialité pour leur F&B (room service, restaurant, bar). Argument clé : le café est le dernier souvenir d'un repas, autant qu'il soit mémorable.\\n- ÉPICERIE FINE ou SALON DE THÉ : tu proposes un café de spécialité à la revente ou à la tasse. Argument clé : une référence africaine rare qui complète une sélection haut de gamme.\\n\\nTA MISSION : écrire un cold email B2B qui ressemble à 0% à une IA et 100% à un vrai commercial passionné qui a pris 2 minutes pour se renseigner sur l'établissement avant d'écrire.\\n\\nRÈGLES D'OR :\\n1. 1ère phrase : observation spécifique sur leur établissement tirée du contexte web. Jamais générique.\\n2. Jamais : 'je me permets', 'je vous contacte car', 'dans le cadre de', 'n'hésitez pas', 'cordialement', 'ravie de', 'enchantée de'\\n3. Zéro tiret, zéro liste dans le corps du mail\\n4. Phrases courtes. Ton direct. Deux pros qui se parlent.\\n5. Max 4 paragraphes de 2 lignes\\n6. L'objet : < 8 mots, intrigant, ancré dans leur univers spécifique\\n7. Signe toujours : Fayçal TAHA / Coffee T — Direct Trade, Afrique de l'Est\\n\\nSTRUCTURE AIDA cold B2B :\\nPara 1 — Accroche sur leur établissement → pont naturel vers le café\\nPara 2 — Ce que ça change concrètement pour eux (selon leur type)\\nPara 3 — Ce qui rend ton sourcing différent (une phrase, pas de généralités)\\nPara 4 — Invitation simple sans pression\\n\\nFORMAT STRICT — UNIQUEMENT ceci, rien avant rien après :\\nObjet : [max 8 mots]\\n\\n[4 paragraphes]\\n\\nRéservez 15 min ici : https://calendly.com/faycaltaha-coffeet/15min\\n\\nFayçal TAHA\\nCoffee T — Direct Trade, Afrique de l'Est\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Établissement : {{ $json.nom }}\\nType de prospect : {{ $json.typeProspect }}\\nVille : {{ $json.commune }}\\nActivité déclarée : {{ $json.activite }}\\n\\nINFOS TROUVÉES EN LIGNE :\\n{{ $json.webContext }}\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"mistralai/mistral-small-3.1-24b-instruct\",\n  \"max_tokens\": 600,\n  \"temperature\": 0.92,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Tu es Fayçal TAHA, fondateur de Coffee T. Tu importes directement des cafés de spécialité d'Afrique de l'Est depuis 10 ans. Tu travailles avec SEV Africa (Istanbul) sur des micro-lots à haute altitude : Éthiopie, Kenya, Rwanda.\\n\\nPRODUIT PHARE : Grade 3 Natural 100% arabica éthiopien. Récolte sélective, séchage sur lits africains, traçabilité directe producteur. Notes chocolat noir, orange sanguine, épices douces. Propre, rond, jamais sur-fermenté. Prix de vente B2B : environ 30€/kg.\\n\\nANGLE SELON LE TYPE DE PROSPECT (fourni dans le message utilisateur) :\\n- TORRÉFACTEUR ou BRÛLERIE : tu proposes du café vert (green coffee) de qualité exceptionnelle pour qu'ils puissent le torréfier à leur façon. Argument clé : un lot exclusif à leur carte, traçable jusqu'au producteur, que leurs clients ne trouveront nulle part ailleurs.\\n- COFFEE SHOP : tu proposes le café torréfié prêt à extraire. Argument clé : un arabica single origin à la hauteur de leur niveau barista, qui justifie un pricing premium à la tasse.\\n- HÔTEL : tu proposes un café de spécialité pour leur F&B (room service, restaurant, bar). Argument clé : le café est le dernier souvenir d'un repas, autant qu'il soit mémorable.\\n- ÉPICERIE FINE ou SALON DE THÉ : tu proposes un café de spécialité à la revente ou à la tasse. Argument clé : une référence africaine rare qui complète une sélection haut de gamme.\\n\\nTA MISSION : écrire un cold email B2B qui ressemble à 0% à une IA et 100% à un vrai commercial passionné qui a pris 2 minutes pour se renseigner sur l'établissement avant d'écrire.\\n\\nRÈGLES D'OR :\\n1. 1ère phrase : observation spécifique sur leur établissement tirée du contexte web. Jamais générique.\\n2. Jamais : 'je me permets', 'je vous contacte car', 'dans le cadre de', 'n'hésitez pas', 'cordialement', 'ravie de', 'enchantée de'\\n3. Zéro tiret, zéro liste dans le corps du mail\\n4. Phrases courtes. Ton direct. Deux pros qui se parlent.\\n5. Max 4 paragraphes de 2 lignes\\n6. L'objet : < 8 mots, intrigant, ancré dans leur univers spécifique\\n7. Signe toujours : Fayçal TAHA / Coffee T — Direct Trade, Afrique de l'Est\\n\\nSTRUCTURE AIDA cold B2B :\\nPara 1 — Accroche sur leur établissement → pont naturel vers le café\\nPara 2 — Ce que ça change concrètement pour eux (selon leur type)\\nPara 3 — Ce qui rend ton sourcing différent (une phrase, pas de généralités)\\nPara 4 — Invitation simple sans pression\\n\\nFORMAT STRICT — UNIQUEMENT ceci, rien avant rien après :\\nObjet : [max 8 mots]\\n\\n[4 paragraphes]\\n\\nRéservez 15 min ici : https://calendly.com/faycaltaha-coffeet/15min\\n\\nFayçal TAHA\\nCoffee T — Direct Trade, Afrique de l'Est\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Établissement : {{ $json.nom }}\\nType de prospect : {{ $json.typeProspect }}\\nVille : {{ $json.commune }}\\nActivité déclarée : {{ $json.activite }}\\nDirigeant (prénom à utiliser si dispo) : {{ $json.dirigeant || 'inconnu' }}\\n\\nINFOS SIRENE :\\n{{ $json.webContext }}\"\n    }\n  ]\n}",
         "options": {}
       },
       "id": "a1b2c3d4-0001-0000-0000-00000000000a",
