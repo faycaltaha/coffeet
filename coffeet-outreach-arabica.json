@@ -95,7 +95,7 @@
     },
     {
       "parameters": {
-        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&page={{ Math.min($json.page, 10) }}&page_size=25",
+        "url": "https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&page=1&page_size=100",
         "options": {
           "response": {
             "response": {
