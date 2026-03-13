@@ -95,8 +95,14 @@
     },
     {
       "parameters": {
-        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&page={{ $json.page }}&page_size=25",
-        "options": {}
+        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&page={{ Math.min($json.page, 10) }}&page_size=25",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000003",
       "name": "Fetch COFFEE",
@@ -106,8 +112,14 @@
     },
     {
       "parameters": {
-        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=TORREFACT&page={{ $json.page }}&page_size=25",
-        "options": {}
+        "url": "https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=TORREFACT&page=1&page_size=100",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000004",
       "name": "Fetch TORREFACT",
@@ -117,8 +129,14 @@
     },
     {
       "parameters": {
-        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=BRULERIE&page={{ $json.page }}&page_size=25",
-        "options": {}
+        "url": "https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=BRULERIE&page=1&page_size=100",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000005",
       "name": "Fetch BRULERIE",
