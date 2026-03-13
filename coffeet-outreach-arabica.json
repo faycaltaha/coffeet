@@ -1,6 +1,6 @@
 {
-  "name": "☕ Coffee T — Outreach Arabica Grade 3 v2",
-  "active": true,
+  "name": "☕ Coffee T — Outreach Arabica Grade 3 v3",
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
@@ -8,30 +8,13 @@
     "callerPolicy": "workflowsFromSameOwner"
   },
   "connections": {
-    "Schedule": {
-      "main": [[{"node": "Page du jour", "type": "main", "index": 0}]]
-    },
-    "Page du jour": {
+    "Lancer": {
       "main": [[
-        {"node": "Fetch COFFEE", "type": "main", "index": 0},
-        {"node": "Fetch TORREFACT", "type": "main", "index": 0},
-        {"node": "Fetch BRULERIE", "type": "main", "index": 0},
+        {"node": "Fetch tout", "type": "main", "index": 0},
         {"node": "Notion — Lire existants", "type": "main", "index": 0}
       ]]
     },
-    "Fetch COFFEE": {
-      "main": [[{"node": "Merge COFFEE+TORREFACT", "type": "main", "index": 0}]]
-    },
-    "Fetch TORREFACT": {
-      "main": [[{"node": "Merge COFFEE+TORREFACT", "type": "main", "index": 1}]]
-    },
-    "Merge COFFEE+TORREFACT": {
-      "main": [[{"node": "Merge+BRULERIE", "type": "main", "index": 0}]]
-    },
-    "Fetch BRULERIE": {
-      "main": [[{"node": "Merge+BRULERIE", "type": "main", "index": 1}]]
-    },
-    "Merge+BRULERIE": {
+    "Fetch tout": {
       "main": [[{"node": "Filtrer", "type": "main", "index": 0}]]
     },
     "Filtrer": {
@@ -67,108 +50,32 @@
   },
   "nodes": [
     {
-      "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 8 * * 1-5"
-            }
-          ]
-        }
-      },
+      "parameters": {},
       "id": "a1b2c3d4-0001-0000-0000-000000000001",
-      "name": "Schedule",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.2,
+      "name": "Lancer",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
       "position": [0, 0]
     },
     {
       "parameters": {
-        "jsCode": "const today = new Date();\n// pageCoffee tourne sur 5 valeurs selon le jour de la semaine (lun=1 … ven=5)\n// COFFEE a largement assez de records pour 5 pages × 20 = 100 résultats / semaine\n// TORREFACT et BRULERIE restent sur page=1 (peu de records en France)\nconst dayOfWeek = today.getDay(); // 0=dim, 1=lun … 5=ven, 6=sam\nconst pageCoffee = (dayOfWeek % 5) + 1; // 1 à 5\nreturn [{ json: { pageCoffee, date: today.toISOString().split('T')[0] } }];"
+        "jsCode": "// Fait tous les appels data.gouv en une seule passe\n// COFFEE pages 1-5 (500 candidats) + TORREFACT + BRULERIE + ESPRESSO\nconst BASE = 'https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/';\nconst SEARCHES = [\n  { term: 'COFFEE',   pages: [1,2,3,4,5] },\n  { term: 'TORREFACT', pages: [1] },\n  { term: 'BRULERIE',  pages: [1] },\n  { term: 'ESPRESSO',  pages: [1] }\n];\n\nconst allRecords = [];\nfor (const s of SEARCHES) {\n  for (const page of s.pages) {\n    const url = `${BASE}?APP_Libelle_etablissement__contains=${s.term}&page=${page}&page_size=100`;\n    try {\n      const resp = await fetch(url);\n      if (resp.ok) {\n        const json = await resp.json();\n        const records = json?.data || json?.results || [];\n        allRecords.push(...records);\n        console.log(`${s.term} p${page}: ${records.length} records`);\n      } else {\n        console.log(`Skip ${s.term} p${page}: HTTP ${resp.status}`);\n      }\n    } catch(e) {\n      console.log(`Erreur ${s.term} p${page}: ${e.message}`);\n    }\n  }\n}\n\nconsole.log('Total brut:', allRecords.length);\nreturn [{ json: { data: allRecords } }];"
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000002",
-      "name": "Page du jour",
+      "name": "Fetch tout",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [240, 0]
+      "position": [240, -60]
     },
     {
       "parameters": {
-        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&page={{ $json.pageCoffee }}&page_size=20",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "jsCode": "// CIBLES PREMIUM uniquement : specialty coffee shops, torréfacteurs, grands hôtels, épiceries fines.\n\nconst BLACKLIST_NOM = [\n  'STARBUCKS', 'COLUMBUS', 'MCDONALD', 'CAFETERIA', 'CASINO',\n  'MONOPRIX', 'FRANPRIX', 'CARREFOUR', 'LECLERC', 'RELAY',\n  'HOPITAL', 'EHPAD', 'WOK', 'SUSHI', 'PIZZA', 'BURGER', 'KEBAB',\n  'SUBWAY', 'QUICK', 'KFC', 'FLUNCH', 'COURTEPAILLE', 'HIPPOPOTAMUS',\n  'DOMINO', 'FIVE GUYS', 'COJEAN', 'RAMEN', 'PAUL', 'BRIOCHE DOREE',\n  'SODEXO', 'ELIOR', 'COMPASS', 'CANTINE', 'RESTAU U', 'INTERMARCHE',\n  'LIDL', 'ALDI', 'AUCHAN', 'SUPER U', 'BIOCOOP'\n];\n\nconst WHITELIST_ACTIVITE = [\n  'torréfact', 'torrefact',\n  'brûlerie', 'brulerie',\n  'coffee', 'barista', 'espresso', 'specialty',\n  'salon de thé', 'tea room', 'tea',\n  'épicerie fine', 'epicerie fine', 'épicerie de luxe',\n  'gastronomie', 'gastronomique',\n  'traiteur de luxe', 'traiteur haut',\n  'hôtel', 'hotel', 'palace'\n];\n\nconst BLACKLIST_ACTIVITE = [\n  'restauration rapide', 'fast food', 'sandwicherie',\n  'distribution automatique', 'vending',\n  'kebab', 'pizza', 'burger', 'friterie',\n  'collectivité', 'scolaire', 'entreprise'\n];\n\nconst IDF = ['75','77','78','91','92','93','94','95'];\n\nconst all = $input.all();\nconst seen = new Set();\nconst result = [];\n\nfor (const item of all) {\n  const records = item.json?.data || item.json?.results || [];\n\n  for (const r of records) {\n    const name     = (r.APP_Libelle_etablissement || '').trim();\n    const activite = (r.APP_Libelle_activite_etablissement || '').toLowerCase();\n    const adresse  = (r.Adresse_2_UA || r.Adresse_etablissement || '').trim();\n    const cp       = (r.Code_postal || '').toString().trim();\n    const commune  = (r.Libelle_commune || '').trim();\n    const siret    = (r.SIRET || '').toString().trim();\n    const dep      = (r.dep_code || '').toString().trim();\n    const note     = (r.Synthese_eval_sanit || '');\n\n    if (!name || name.length < 3) continue;\n    if (cp && !IDF.some(p => cp.startsWith(p))) continue;\n    if (note === 'A améliorer') continue;\n\n    const nameUp = name.toUpperCase();\n    if (BLACKLIST_NOM.some(b => nameUp.includes(b))) continue;\n    if (BLACKLIST_ACTIVITE.some(b => activite.includes(b))) continue;\n\n    const activiteOK = WHITELIST_ACTIVITE.some(w => activite.includes(w));\n    if (!activiteOK) continue;\n\n    const key = nameUp.replace(/[^A-Z0-9]/g, '').substring(0, 10);\n    if (seen.has(key)) continue;\n    seen.add(key);\n\n    let typeProspect = 'COFFEE SHOP';\n    let score = 8;\n    if (activite.includes('torréfact') || activite.includes('torrefact') || activite.includes('brûlerie') || activite.includes('brulerie')) {\n      typeProspect = 'TORRÉFACTEUR'; score = 9;\n    } else if (activite.includes('hôtel') || activite.includes('hotel') || activite.includes('palace')) {\n      typeProspect = 'HÔTEL'; score = 9;\n    } else if (activite.includes('épicerie fine') || activite.includes('epicerie fine') || activite.includes('gastronomie') || activite.includes('traiteur')) {\n      typeProspect = 'ÉPICERIE FINE'; score = 8;\n    } else if (activite.includes('salon de thé') || activite.includes('tea')) {\n      typeProspect = 'SALON DE THÉ'; score = 7;\n    }\n\n    result.push({ nom: name, adresse, code_postal: cp, commune, activite: r.APP_Libelle_activite_etablissement || '', siret, dep, key, typeProspect, score });\n  }\n}\n\nconsole.log('Prospects IDF premium trouvés:', result.length);\n\nif (result.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\nresult.sort((a, b) => b.score - a.score);\nreturn result.slice(0, 100).map(r => ({ json: r }));"
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000003",
-      "name": "Fetch COFFEE",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [480, -200]
-    },
-    {
-      "parameters": {
-        "url": "https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=TORREFACT&page=1&page_size=100",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
-      },
-      "id": "a1b2c3d4-0001-0000-0000-000000000004",
-      "name": "Fetch TORREFACT",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [480, 0]
-    },
-    {
-      "parameters": {
-        "url": "https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=BRULERIE&page=1&page_size=100",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
-      },
-      "id": "a1b2c3d4-0001-0000-0000-000000000005",
-      "name": "Fetch BRULERIE",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [480, 200]
-    },
-    {
-      "parameters": {},
-      "id": "a1b2c3d4-0001-0000-0000-000000000006",
-      "name": "Merge COFFEE+TORREFACT",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [720, -100]
-    },
-    {
-      "parameters": {},
-      "id": "a1b2c3d4-0001-0000-0000-000000000007",
-      "name": "Merge+BRULERIE",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [960, 0]
-    },
-    {
-      "parameters": {
-        "jsCode": "// CIBLES PREMIUM uniquement : specialty coffee shops, torréfacteurs, grands hôtels,\n// épiceries fines. On rejette tout ce qui est générique ou bas de gamme.\n\nconst BLACKLIST_NOM = [\n  'STARBUCKS', 'COLUMBUS', 'MCDONALD', 'CAFETERIA', 'CASINO',\n  'MONOPRIX', 'FRANPRIX', 'CARREFOUR', 'LECLERC', 'RELAY',\n  'HOPITAL', 'EHPAD', 'WOK', 'SUSHI', 'PIZZA', 'BURGER', 'KEBAB',\n  'SUBWAY', 'QUICK', 'KFC', 'FLUNCH', 'COURTEPAILLE', 'HIPPOPOTAMUS',\n  'DOMINO', 'FIVE GUYS', 'COJEAN', 'RAMEN', 'PAUL', 'BRIOCHE DOREE',\n  'SODEXO', 'ELIOR', 'COMPASS', 'CANTINE', 'RESTAU U', 'INTERMARCHE',\n  'LIDL', 'ALDI', 'AUCHAN', 'SUPER U', 'BIOCOOP'\n];\n\n// Activités acceptées : établissements susceptibles de valoriser 30€/kg\nconst WHITELIST_ACTIVITE = [\n  'torréfact', 'torrefact',        // torréfacteurs → café vert\n  'brûlerie', 'brulerie',          // brûleries → café vert ou torréfié\n  'coffee',                         // specialty coffee shops\n  'barista', 'espresso', 'specialty',\n  'salon de thé', 'tea room', 'tea',\n  'épicerie fine', 'epicerie fine', 'épicerie de luxe',\n  'gastronomie', 'gastronomique',\n  'traiteur de luxe', 'traiteur haut',\n  'hôtel', 'hotel', 'palace'\n];\n\n// Activités à rejeter explicitement même si le nom passe le filtre\nconst BLACKLIST_ACTIVITE = [\n  'restauration rapide', 'fast food', 'sandwicherie',\n  'distribution automatique', 'vending',\n  'kebab', 'pizza', 'burger', 'friterie',\n  'collectivité', 'scolaire', 'entreprise'\n];\n\nconst all = $input.all();\nconst seen = new Set();\nconst result = [];\n\nfor (const item of all) {\n  const records = item.json?.data || item.json?.results || [];\n\n  for (const r of records) {\n    const name     = (r.APP_Libelle_etablissement || '').trim();\n    const activite = (r.APP_Libelle_activite_etablissement || '').toLowerCase();\n    const adresse  = (r.Adresse_2_UA || r.Adresse_etablissement || '').trim();\n    const cp       = (r.Code_postal || '').toString().trim();\n    const commune  = (r.Libelle_commune || '').trim();\n    const siret    = (r.SIRET || '').toString().trim();\n    const dep      = (r.dep_code || '').toString().trim();\n    const note     = (r.Synthese_eval_sanit || '');\n\n    // Île-de-France : 75 77 78 91 92 93 94 95\n    const IDF = ['75','77','78','91','92','93','94','95'];\n    if (!name || name.length < 3) continue;\n    if (cp && !IDF.some(p => cp.startsWith(p))) continue;\n    if (note === 'A améliorer') continue;\n\n    const nameUp = name.toUpperCase();\n    if (BLACKLIST_NOM.some(b => nameUp.includes(b))) continue;\n    if (BLACKLIST_ACTIVITE.some(b => activite.includes(b))) continue;\n\n    const activiteOK = WHITELIST_ACTIVITE.some(w => activite.includes(w));\n    if (!activiteOK) continue;\n\n    const key = nameUp.replace(/[^A-Z0-9]/g, '').substring(0, 10);\n    if (seen.has(key)) continue;\n    seen.add(key);\n\n    // Catégorise pour adapter l'angle du mail et le score Notion\n    let typeProspect = 'COFFEE SHOP';\n    let score = 8;\n    if (activite.includes('torréfact') || activite.includes('torrefact') || activite.includes('brûlerie') || activite.includes('brulerie')) {\n      typeProspect = 'TORRÉFACTEUR'; score = 9;\n    } else if (activite.includes('hôtel') || activite.includes('hotel') || activite.includes('palace')) {\n      typeProspect = 'HÔTEL'; score = 9;\n    } else if (activite.includes('épicerie fine') || activite.includes('epicerie fine') || activite.includes('gastronomie') || activite.includes('traiteur')) {\n      typeProspect = 'ÉPICERIE FINE'; score = 8;\n    } else if (activite.includes('salon de thé') || activite.includes('tea')) {\n      typeProspect = 'SALON DE THÉ'; score = 7;\n    }\n\n    result.push({ nom: name, adresse, code_postal: cp, commune, activite: r.APP_Libelle_activite_etablissement || '', siret, dep, key, typeProspect, score });\n  }\n}\n\nconsole.log('Résultats après filtre premium:', result.length);\n\nif (result.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\n// Trie par score décroissant pour prioriser torréfacteurs et hôtels\nresult.sort((a, b) => b.score - a.score);\n\nreturn result.slice(0, 15).map(r => ({ json: r }));"
-      },
-      "id": "a1b2c3d4-0001-0000-0000-000000000008",
       "name": "Filtrer",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 0]
+      "position": [480, -60]
     },
     {
       "parameters": {
@@ -187,29 +94,29 @@
         "jsonBody": "{ \"page_size\": 100 }",
         "options": {}
       },
-      "id": "a1b2c3d4-0001-0000-0000-000000000009",
+      "id": "a1b2c3d4-0001-0000-0000-000000000004",
       "name": "Notion — Lire existants",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, 250]
+      "position": [240, 200]
     },
     {
       "parameters": {},
-      "id": "a1b2c3d4-0001-0000-0000-00000000000a",
+      "id": "a1b2c3d4-0001-0000-0000-000000000005",
       "name": "Merge Notion+Filtrer",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [1440, 125]
+      "position": [720, 70]
     },
     {
       "parameters": {
-        "jsCode": "const allItems = $input.all();\nconst candidats   = allItems.filter(i => i.json.key);\nconst notionItems = allItems.filter(i => !i.json.key);\n\nconst existing = new Set();\nfor (const item of notionItems) {\n  const results = item.json?.results || [];\n  for (const r of results) {\n    const t = r.properties?.Nom?.title?.[0]?.plain_text || '';\n    if (t) existing.add(t.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10));\n  }\n}\n\nconst seen = new Set();\nconst nouveaux = [];\nfor (const item of candidats) {\n  const k = item.json.key;\n  if (!existing.has(k) && !seen.has(k)) {\n    seen.add(k);\n    nouveaux.push({ json: item.json });\n  }\n}\n\nconsole.log('Nouveaux prospects premium:', nouveaux.length);\n\nif (nouveaux.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\nreturn nouveaux.slice(0, 8);"
+        "jsCode": "const allItems = $input.all();\nconst candidats   = allItems.filter(i => i.json.key);\nconst notionItems = allItems.filter(i => !i.json.key);\n\nconst existing = new Set();\nfor (const item of notionItems) {\n  const results = item.json?.results || [];\n  for (const r of results) {\n    const t = r.properties?.Nom?.title?.[0]?.plain_text || '';\n    if (t) existing.add(t.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10));\n  }\n}\n\nconst seen = new Set();\nconst nouveaux = [];\nfor (const item of candidats) {\n  const k = item.json.key;\n  if (!existing.has(k) && !seen.has(k)) {\n    seen.add(k);\n    nouveaux.push({ json: item.json });\n  }\n}\n\nconsole.log('Nouveaux prospects à traiter:', nouveaux.length);\n\nif (nouveaux.length === 0) {\n  return [{ json: { _skip: true } }];\n}\n\nreturn nouveaux.slice(0, 100);"
       },
-      "id": "a1b2c3d4-0001-0000-0000-00000000000b",
+      "id": "a1b2c3d4-0001-0000-0000-000000000006",
       "name": "Anti-doublons",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1680, 125]
+      "position": [960, 70]
     },
     {
       "parameters": {
@@ -224,11 +131,11 @@
         },
         "options": {}
       },
-      "id": "a1b2c3d4-0001-0000-0000-00000000000c",
+      "id": "a1b2c3d4-0001-0000-0000-000000000007",
       "name": "Skip si vide ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1920, 125]
+      "position": [1200, 70]
     },
     {
       "parameters": {
@@ -249,21 +156,21 @@
           }
         }
       },
-      "id": "a1b2c3d4-0001-0000-0000-00000000000d",
+      "id": "a1b2c3d4-0001-0000-0000-000000000008",
       "name": "Chercher site web",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2160, 125]
+      "position": [1440, 70]
     },
     {
       "parameters": {
         "jsCode": "const prospect = $('Anti-doublons').item.json;\n\nconst jinaRaw = $json;\nlet rawText = '';\n\nif (typeof jinaRaw === 'string') {\n  rawText = jinaRaw;\n} else if (jinaRaw?.body) {\n  rawText = typeof jinaRaw.body === 'string' ? jinaRaw.body : JSON.stringify(jinaRaw.body);\n} else {\n  rawText = JSON.stringify(jinaRaw);\n}\n\nlet webContext = rawText\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/https?:\\/\\/[^\\s]+/g, '')\n  .replace(/\\[.*?\\]\\(.*?\\)/g, '')\n  .replace(/#{1,6}\\s/g, '')\n  .replace(/[\\r\\n]+/g, ' ')\n  .replace(/\\s{2,}/g, ' ')\n  .replace(/\"/g, \"'\")\n  .trim()\n  .substring(0, 1200);\n\nif (!webContext || webContext.length < 30) {\n  webContext = `${prospect.typeProspect} ${prospect.nom} à ${prospect.commune}. Activité : ${prospect.activite}. Pas d'info web disponible.`;\n}\n\nreturn [{ json: { ...prospect, webContext } }];"
       },
-      "id": "a1b2c3d4-0001-0000-0000-00000000000e",
+      "id": "a1b2c3d4-0001-0000-0000-000000000009",
       "name": "Extraire contexte",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2400, 125]
+      "position": [1680, 70]
     },
     {
       "parameters": {
@@ -283,21 +190,21 @@
         "jsonBody": "={\n  \"model\": \"mistralai/mistral-small-3.1-24b-instruct\",\n  \"max_tokens\": 600,\n  \"temperature\": 0.92,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Tu es Fayçal TAHA, fondateur de Coffee T. Tu importes directement des cafés de spécialité d'Afrique de l'Est depuis 10 ans. Tu travailles avec SEV Africa (Istanbul) sur des micro-lots à haute altitude : Éthiopie, Kenya, Rwanda.\\n\\nPRODUIT PHARE : Grade 3 Natural 100% arabica éthiopien. Récolte sélective, séchage sur lits africains, traçabilité directe producteur. Notes chocolat noir, orange sanguine, épices douces. Propre, rond, jamais sur-fermenté. Prix de vente B2B : environ 30€/kg.\\n\\nANGLE SELON LE TYPE DE PROSPECT (fourni dans le message utilisateur) :\\n- TORRÉFACTEUR ou BRÛLERIE : tu proposes du café vert (green coffee) de qualité exceptionnelle pour qu'ils puissent le torréfier à leur façon. Argument clé : un lot exclusif à leur carte, traçable jusqu'au producteur, que leurs clients ne trouveront nulle part ailleurs.\\n- COFFEE SHOP : tu proposes le café torréfié prêt à extraire. Argument clé : un arabica single origin à la hauteur de leur niveau barista, qui justifie un pricing premium à la tasse.\\n- HÔTEL : tu proposes un café de spécialité pour leur F&B (room service, restaurant, bar). Argument clé : le café est le dernier souvenir d'un repas, autant qu'il soit mémorable.\\n- ÉPICERIE FINE ou SALON DE THÉ : tu proposes un café de spécialité à la revente ou à la tasse. Argument clé : une référence africaine rare qui complète une sélection haut de gamme.\\n\\nTA MISSION : écrire un cold email B2B qui ressemble à 0% à une IA et 100% à un vrai commercial passionné qui a pris 2 minutes pour se renseigner sur l'établissement avant d'écrire.\\n\\nRÈGLES D'OR :\\n1. 1ère phrase : observation spécifique sur leur établissement tirée du contexte web. Jamais générique.\\n2. Jamais : 'je me permets', 'je vous contacte car', 'dans le cadre de', 'n'hésitez pas', 'cordialement', 'ravie de', 'enchantée de'\\n3. Zéro tiret, zéro liste dans le corps du mail\\n4. Phrases courtes. Ton direct. Deux pros qui se parlent.\\n5. Max 4 paragraphes de 2 lignes\\n6. L'objet : < 8 mots, intrigant, ancré dans leur univers spécifique\\n7. Signe toujours : Fayçal TAHA / Coffee T — Direct Trade, Afrique de l'Est\\n\\nSTRUCTURE AIDA cold B2B :\\nPara 1 — Accroche sur leur établissement → pont naturel vers le café\\nPara 2 — Ce que ça change concrètement pour eux (selon leur type)\\nPara 3 — Ce qui rend ton sourcing différent (une phrase, pas de généralités)\\nPara 4 — Invitation simple sans pression\\n\\nFORMAT STRICT — UNIQUEMENT ceci, rien avant rien après :\\nObjet : [max 8 mots]\\n\\n[4 paragraphes]\\n\\nRéservez 15 min ici : https://calendly.com/faycaltaha-coffeet/15min\\n\\nFayçal TAHA\\nCoffee T — Direct Trade, Afrique de l'Est\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Établissement : {{ $json.nom }}\\nType de prospect : {{ $json.typeProspect }}\\nVille : {{ $json.commune }}\\nActivité déclarée : {{ $json.activite }}\\n\\nINFOS TROUVÉES EN LIGNE :\\n{{ $json.webContext }}\"\n    }\n  ]\n}",
         "options": {}
       },
-      "id": "a1b2c3d4-0001-0000-0000-00000000000f",
+      "id": "a1b2c3d4-0001-0000-0000-00000000000a",
       "name": "OpenRouter — Mistral",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2640, 125]
+      "position": [1920, 70]
     },
     {
       "parameters": {
         "jsCode": "const aiResponse = $('OpenRouter — Mistral').item.json;\nconst text = aiResponse?.choices?.[0]?.message?.content || '';\n\nconst lines = text.split('\\n').map(l => l.trim()).filter(Boolean);\nlet objet = '';\nconst bodyLines = [];\nlet headerParsed = false;\n\nfor (const line of lines) {\n  if (!headerParsed && /^objet\\s*:/i.test(line)) {\n    objet = line.replace(/^objet\\s*:\\s*/i, '').trim();\n    headerParsed = true;\n  } else if (headerParsed) {\n    bodyLines.push(line);\n  }\n}\n\nif (!objet) {\n  objet = 'Un arabica éthiopien pour votre sélection';\n  bodyLines.push(...lines);\n}\n\nconst p = $('Extraire contexte').item.json;\nconst adresseComplete = [p.adresse || '', p.code_postal || '', p.commune || ''].filter(Boolean).join(', ').substring(0, 200);\nconst notes = [p.siret ? 'SIRET: ' + p.siret : '', p.activite || '', p.typeProspect || ''].filter(Boolean).join(' | ').substring(0, 200);\n\nconst notionBody = {\n  parent: { database_id: '8aa6d741-7872-47d0-94b9-6ac4bc8039f6' },\n  properties: {\n    'Nom': {\n      title: [{ text: { content: (p.nom || '').substring(0, 100) } }]\n    },\n    'Adresse': {\n      rich_text: [{ text: { content: adresseComplete } }]\n    },\n    'Catégorie': {\n      select: { name: p.typeProspect || 'COFFEE SHOP' }\n    },\n    'Statut Email': {\n      select: { name: 'À envoyer' }\n    },\n    'Notes': {\n      rich_text: [{ text: { content: notes } }]\n    }\n  },\n  children: [\n    {\n      object: 'block',\n      type: 'callout',\n      callout: {\n        rich_text: [{ type: 'text', text: { content: ('Objet : ' + objet).substring(0, 200) } }],\n        icon: { emoji: '📧' },\n        color: 'blue_background'\n      }\n    },\n    {\n      object: 'block',\n      type: 'paragraph',\n      paragraph: {\n        rich_text: [{ type: 'text', text: { content: bodyLines.join('\\n').substring(0, 2000) } }]\n      }\n    },\n    {\n      object: 'block',\n      type: 'divider',\n      divider: {}\n    },\n    {\n      object: 'block',\n      type: 'callout',\n      callout: {\n        rich_text: [{ type: 'text', text: { content: ('Contexte web : ' + (p.webContext || 'N/A')).substring(0, 400) } }],\n        icon: { emoji: '🌐' },\n        color: 'gray_background'\n      }\n    }\n  ]\n};\n\nreturn [{ json: { notionBody } }];"
       },
-      "id": "a1b2c3d4-0001-0000-0000-000000000010",
+      "id": "a1b2c3d4-0001-0000-0000-00000000000b",
       "name": "Parser mail",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2880, 125]
+      "position": [2160, 70]
     },
     {
       "parameters": {
@@ -316,11 +223,11 @@
         "jsonBody": "={{ $json.notionBody }}",
         "options": {}
       },
-      "id": "a1b2c3d4-0001-0000-0000-000000000011",
+      "id": "a1b2c3d4-0001-0000-0000-00000000000c",
       "name": "Notion — Créer page",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3120, 125]
+      "position": [2400, 70]
     }
   ]
 }
