@@ -85,7 +85,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const today = new Date();\nconst seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();\nconst offset = (seed % 50) * 20;\nconst page = Math.floor(offset / 20) + 1;\nreturn [{ json: { offset, page, date: today.toISOString().split('T')[0] } }];"
+        "jsCode": "const today = new Date();\n// pageCoffee tourne sur 5 valeurs selon le jour de la semaine (lun=1 … ven=5)\n// COFFEE a largement assez de records pour 5 pages × 20 = 100 résultats / semaine\n// TORREFACT et BRULERIE restent sur page=1 (peu de records en France)\nconst dayOfWeek = today.getDay(); // 0=dim, 1=lun … 5=ven, 6=sam\nconst pageCoffee = (dayOfWeek % 5) + 1; // 1 à 5\nreturn [{ json: { pageCoffee, date: today.toISOString().split('T')[0] } }];"
       },
       "id": "a1b2c3d4-0001-0000-0000-000000000002",
       "name": "Page du jour",
@@ -95,7 +95,7 @@
     },
     {
       "parameters": {
-        "url": "https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&page=1&page_size=100",
+        "url": "=https://tabular-api.data.gouv.fr/api/resources/fdfabe62-a581-41a1-998f-73fc53da3398/data/?APP_Libelle_etablissement__contains=COFFEE&page={{ $json.pageCoffee }}&page_size=20",
         "options": {
           "response": {
             "response": {
