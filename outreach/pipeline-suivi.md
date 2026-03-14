@@ -5,55 +5,65 @@
 
 ---
 
-## SEMAINE 1 — Levier Verlet
+## STRATÉGIE EN 3 PHASES
 
-| Prospect | Décideur | Contact | Statut | Date contact | Date relance | Résultat |
-|----------|----------|---------|--------|--------------|--------------|----------|
-| **Café Verlet** | Éric Duchossoy | +33 1 42 60 67 39 / verlet.fr/contact | ⬜ À contacter | | | |
+```
+PHASE 1 (S1-S3) : Cafés spé + Brûleries
+  → Premières ventes, premiers retours produit, stock de témoignages
 
-**Objectif S1** : Décrocher un RDV dégustation avec Éric Duchossoy avant le 21 mars.
+PHASE 2 (S4-S6) : Restaurants haut de gamme NON étoilés
+  → Bistrots gastronomiques, brasseries premium, comptoirs tendance
+  → On vend avec "déjà référencé chez [Verlet / Terres de Café]"
+
+PHASE 3 (S7+) : Palaces & Étoilés Michelin
+  → On vend avec 5-10 références solides en poche
+```
 
 ---
 
-## SEMAINE 2 — Torréfacteurs (en parallèle)
+## PHASE 1 — Cafés spé & Brûleries
+
+| Prospect | Décideur | Contact | Score | Statut | Date contact | Date relance | Résultat |
+|----------|----------|---------|-------|--------|--------------|--------------|----------|
+| **Café Verlet** | Éric Duchossoy | +33 1 42 60 67 39 | 8.9 🔥 | ⬜ À contacter | | | |
+| **Terres de Café** | Christophe Servell | +33 1 45 50 37 39 | 9.2 🔥 | ⬜ À contacter | | | |
+| **Café Lomi** | Aleaume Paturle | +33 9 80 39 56 24 | 8.8 🔥 | ⬜ À contacter | | | |
+| **Coutume Café** | Tom Clark / A. Nétien | +33 9 88 40 47 99 | 8.7 🔥 | ⬜ À contacter | | | |
+| **Belleville Brûlerie** | David Flynn | +33 1 42 85 79 37 | 8.6 🔥 | ⬜ À contacter | | | |
+| **Télescope Café** | Nicolas Clerc | Visite / @telescopecafe | 8.3 🔥 | ⬜ À contacter | | | |
+| **La Caféothèque** | Gloria Montenegro | lacafeotheque.com | 8.2 🔥 | ⬜ À contacter | | | |
+| **KB Coffee Roasters** | Nico Piègay | kbcoffeeroasters.com | 8.0 🔥 | ⬜ À contacter | | | |
+
+**Objectif phase 1** : 3 premiers clients signés + témoignages exploitables
+
+---
+
+## PHASE 2 — Restaurants haut de gamme (non étoilés)
+
+*À compléter avec les résultats de recherche*
 
 | Prospect | Décideur | Contact | Score | Statut | Date contact | Résultat |
 |----------|----------|---------|-------|--------|--------------|----------|
-| **Terres de Café** | Christophe Servell | +33 1 45 50 37 39 | 9.2 🔥 | ⬜ À contacter | | |
-| **Café Lomi** | Aleaume Paturle | +33 9 80 39 56 24 | 8.8 🔥 | ⬜ À contacter | | |
-| **Coutume Café** | Tom Clark / A. Nétien | +33 9 88 40 47 99 | 8.7 🔥 | ⬜ À contacter | | |
-| **Belleville Brûlerie** | David Flynn | +33 1 42 85 79 37 | 8.6 🔥 | ⬜ À contacter | | |
+| *(en cours de recherche)* | | | | | | |
 
-**Objectif S2** : 4 emails envoyés + au moins 2 cuppings fixés.
+**Argument phase 2** : "Déjà référencé chez [X brûlerie / Y café spé] — voici les retours clients."
 
----
-
-## SEMAINE 3 — Palaces & épiceries fines
-
-| Prospect | Décideur | Contact | Score | Statut | Date contact | Résultat |
-|----------|----------|---------|-------|--------|--------------|----------|
-| **Four Seasons George V** | Direction F&B | Via Verlet ou fourseasons.com/paris/contact-us | 8.6 🔥 | ⬜ Dépend Verlet S1 | | |
-| **Substance Café** | Joachim Morceau | substancecafe.com / visite boutique | 8.5 🔥 | ⬜ À contacter | | |
-| **Le Bristol — Épicerie** | Achats Épicerie | +33 1 53 43 43 00 | 8.5 🔥 | ⬜ À contacter | | |
-| **La Grande Épicerie** | Direction achats | +33 1 44 39 81 00 | 8.4 🔥 | ⬜ À contacter | | |
-| **Télescope Café** | Nicolas Clerc | Visite / @telescopecafe | 8.3 🔥 | ⬜ À contacter | | |
-| **Mandarin Lutetia** | Delphine Auger | +33 1 49 54 46 00 | 8.3 🔥 | ⬜ À contacter | | |
-| **La Caféothèque** | Gloria Montenegro | lacafeotheque.com | 8.2 🔥 | ⬜ À contacter | | |
-| **Ritz Paris** | Direction F&B | Via Verlet ou ritzparis.com | 8.1 🔥 | ⬜ Via Verlet | | |
-| **KB Coffee Roasters** | Nico Piègay | kbcoffeeroasters.com | 8.0 🔥 | ⬜ À contacter | | |
+**Objectif phase 2** : 5 restaurants signés + usage en carte café visible
 
 ---
 
-## PROSPECTS CHAUDS RESTANTS (pipeline long terme)
+## PHASE 3 — Palaces & Étoilés Michelin
 
-| Prospect | Décideur | Contact | Score | Statut |
-|----------|----------|---------|-------|--------|
-| **Fauchon** | Direction achats | fauchon.com | 7.9 🌡️ | ⬜ S4 |
-| **HolyBelly** | Nico Alary | hello@holybellycafe.com | 7.8 🌡️ | ⬜ Via Belleville |
-| **Cofftea & Shop** | Ivan Alfaro | cofftea-shop.com | 7.7 🌡️ | ⬜ S4 |
-| **La Fontaine de Belleville** | David Flynn | +33 9 81 75 54 54 | 7.6 🌡️ | ⬜ Via Belleville |
-| **Fringe Coffee Paris** | Jeff Hargrove | fringecoffeeparis.com | 7.5 🌡️ | ⬜ S4 |
-| **Fondation Café** | Chris Nielson | Via Belleville | 7.4 🌡️ | ⬜ Via Belleville |
+*À activer uniquement avec 5+ références solides*
+
+| Prospect | Décideur | Contact | Score | Statut | Prérequis |
+|----------|----------|---------|-------|--------|-----------|
+| **Four Seasons George V** | Direction F&B | Via Verlet ou direct | 8.6 🔥 | ⏸ Phase 3 | Verlet signé |
+| **Mandarin Oriental Lutetia** | Delphine Auger | +33 1 49 54 46 00 | 8.3 🔥 | ⏸ Phase 3 | 5 refs |
+| **Le Bristol** | Achats / F&B | +33 1 53 43 43 00 | 8.5 🔥 | ⏸ Phase 3 | 5 refs |
+| **Ritz Paris** | Direction F&B | Via réseau | 8.1 🔥 | ⏸ Phase 3 | Verlet signé |
+
+**Argument phase 3** : "Déjà servi chez [liste de références] — voici la fiche technique et les retours."
 
 ---
 
@@ -62,31 +72,32 @@
 | Statut | Signification |
 |--------|---------------|
 | ⬜ À contacter | Pas encore approché |
-| 📧 Email envoyé | Email envoyé, en attente de réponse |
-| 📞 Relance tel | Relance téléphonique effectuée |
-| 📅 RDV fixé | Dégustation / réunion planifiée |
-| ✅ Converti | Accord commercial en cours |
-| ❌ Non intéressé | Refus ou sans suite |
-| 🔁 Nurture | À relancer dans 3 mois |
+| 📧 Email envoyé | En attente de réponse |
+| 📞 Relancé | Relance téléphonique effectuée |
+| 📅 RDV fixé | Dégustation planifiée |
+| ✅ Converti | Accord commercial |
+| ❌ Refus | Sans suite |
+| 🔁 Nurture | Relancer dans 3 mois |
+| ⏸ Phase 3 | Ne pas contacter avant phase 3 |
 
 ---
 
-## KIT DE PROSPECTION (à préparer avant le 1er RDV)
+## KIT DE PROSPECTION PHASE 1
 
-- [ ] Échantillons 200g x 10 sachets (conditionnement professionnel)
-- [ ] Rapport Q-grader certifié (cup score SCA officiel)
-- [ ] Fiche terroir : région, altitude, variété, process, millésime, coopérative
-- [ ] Plaquette commerciale 1 page (FR + EN)
-- [ ] Tarification B2B (vert / torréfié) avec barèmes dégressifs volume
+- [ ] Échantillons 200g × 10 sachets (pro)
+- [ ] Rapport Q-grader certifié
+- [ ] Fiche terroir 1 page (région, altitude, variété, process, millésime)
+- [ ] Plaquette commerciale avec tarifs B2B
 - [ ] Conditions de livraison IDF
 
 ---
 
-## MÉTRIQUES DE SUIVI
+## MÉTRIQUES PAR PHASE
 
-| Métrique | Objectif S1 | Objectif S4 |
-|----------|-------------|-------------|
-| Emails envoyés | 1 (Verlet) | 15+ |
-| RDV dégustation obtenus | 1 | 6+ |
-| Prospects convertis | 0 → 1 (Verlet) | 3+ |
-| CA pipeline estimé | — | 5 000–15 000 €/mois |
+| Métrique | Objectif P1 | Objectif P2 | Objectif P3 |
+|----------|-------------|-------------|-------------|
+| Prospects contactés | 8 | +8 | 4 |
+| RDV dégustation | 4 | 5 | 3 |
+| Clients signés | 3 | 5 | 2 |
+| Références utilisables | — | 3+ | 8+ |
+| CA mensuel estimé | 2-5K€ | 5-10K€ | 10-20K€ |
