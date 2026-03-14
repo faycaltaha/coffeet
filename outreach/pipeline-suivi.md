@@ -40,11 +40,19 @@ PHASE 3 (S7+) : Palaces & Étoilés Michelin
 
 ## PHASE 2 — Restaurants haut de gamme (non étoilés)
 
-*À compléter avec les résultats de recherche*
+**Argument** : "Déjà référencé chez [X brûlerie / Y café spé] — voici les retours clients."
 
 | Prospect | Décideur | Contact | Score | Statut | Date contact | Résultat |
 |----------|----------|---------|-------|--------|--------------|----------|
-| *(en cours de recherche)* | | | | | | |
+| **Les Résistants — La Table** | Florent Piard | 09 81 41 01 07 | 9/10 🔥 | ⬜ À contacter | | |
+| **Clown Bar** | Chef en poste (à confirmer) | +33 1 43 55 87 35 | 9/10 🔥 | ⬜ À contacter | | |
+| **Le Servan** | Katia Levha (salle/achats) | +33 1 55 28 51 82 | 8/10 🔥 | ⬜ À contacter | | |
+| **Bistrot Paul Bert** (+3 adresses) | Bertrand Auboyneau | Visite terrain 14h30-17h | 8/10 🔥 | ⬜ Visite terrain | | |
+| **Verjus** | Laura Adrian | +33 1 42 97 54 40 | 8/10 🔥 | ⬜ À contacter | | |
+| **Clamato** (famille Septime) | Théophile Pourriat | +33 1 43 72 74 53 | 7/10 🔥 | ⬜ À contacter | | |
+| **Magdalena** | Sylvain Bouzard / Dir. F&B | +33 1 53 81 08 17 | 7/10 🔥 | ⬜ À contacter | | |
+| **Dilia** | Michele Farnesi | 09 53 56 24 14 | 7/10 🔥 | ⬜ À contacter | | |
+| **Elbi** | Omar Dhiab | @restaurantelbi Instagram | 7/10 🔥 | ⬜ À contacter | | |
 
 **Argument phase 2** : "Déjà référencé chez [X brûlerie / Y café spé] — voici les retours clients."
 
