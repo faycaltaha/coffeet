@@ -5,6 +5,7 @@ import ProfileForm from "@/components/ProfileForm";
 import GiftResults from "@/components/GiftResults";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import type { AnalyzeRequest, AnalysisResult } from "@/types";
+import { DEMO_RESULT } from "@/lib/demo-data";
 
 type State =
   | { status: "idle" }
@@ -22,6 +23,13 @@ const LOADING_MESSAGES = [
 export default function HomePage() {
   const [state, setState] = useState<State>({ status: "idle" });
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
+
+  const runDemo = () => {
+    setState({ status: "loading" });
+    setTimeout(() => {
+      setState({ status: "result", data: DEMO_RESULT, recipientName: "Alex" });
+    }, 2200);
+  };
 
   const handleSubmit = async (data: AnalyzeRequest) => {
     setState({ status: "loading" });
@@ -77,6 +85,13 @@ export default function HomePage() {
             </span>
           ))}
         </div>
+
+        <button
+          onClick={runDemo}
+          className="mt-5 inline-flex items-center gap-2 px-5 py-2 rounded-full bg-brand-500 text-white text-sm font-semibold shadow hover:bg-brand-600 transition"
+        >
+          ▶ See a demo
+        </button>
       </div>
 
       {/* Card */}
