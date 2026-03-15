@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
@@ -19,8 +20,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
+import anthropic
 import httpx
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
@@ -92,6 +95,50 @@ GEARBOX_SCORES = {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Known problematic engines — hard blacklist (pre-filter)
+# ─────────────────────────────────────────────────────────────
+# Format: (title_keyword, brand_or_None, reason)
+# A listing matches if title_keyword is found in the ad title (case-insensitive)
+# and brand matches (or brand is None = match any brand).
+
+ENGINE_BLACKLIST: list[tuple[str, Optional[str], str]] = [
+    # Peugeot / Citroën / Opel 1.2 PureTech — timing chain stretches, snaps
+    ("puretech", None,        "1.2 PureTech: timing chain failure (PSA/Stellantis recall issue)"),
+    ("1.2 vti", "peugeot",    "1.2 VTi: camshaft follower wear, oil starvation"),
+    ("1.2 vti", "citroen",    "1.2 VTi: camshaft follower wear, oil starvation"),
+
+    # Renault 1.2 TCe 115 / 120 — timing chain + head gasket
+    ("1.2 tce 115", "renault", "1.2 TCe 115: timing chain stretch + head gasket failure"),
+    ("1.2 tce 120", "renault", "1.2 TCe 120: timing chain stretch + head gasket failure"),
+    ("1.2 tce 130", "renault", "1.2 TCe 130: timing chain stretch + head gasket failure"),
+
+    # Fiat 1.4 MultiAir T-Jet — inlet valve carbon build-up + timing
+    ("1.4 multiair", None,    "1.4 MultiAir: valve carbon build-up, expensive to fix"),
+    ("1.4 t-jet", "fiat",     "1.4 T-Jet: timing belt on wet clutch, frequent failures"),
+
+    # BMW N47 diesel — timing chain at rear of engine (catastrophic)
+    ("n47",   "bmw",          "BMW N47: rear timing chain — catastrophic failure, €4k+ repair"),
+    ("116d",  "bmw",          "BMW N47 (116d): rear timing chain catastrophic failure risk"),
+    ("118d",  "bmw",          "BMW N47 (118d): rear timing chain catastrophic failure risk"),
+    ("120d",  "bmw",          "BMW N47 (120d): rear timing chain catastrophic failure risk"),
+    ("318d",  "bmw",          "BMW N47 (318d): rear timing chain catastrophic failure risk"),
+    ("320d",  "bmw",          "BMW N47 (320d): rear timing chain catastrophic failure risk"),
+
+    # Volkswagen / Audi EA189 1.6 TDI — injector + EGR issues (less severe, flag only)
+    # ("1.6 tdi", "volkswagen", "1.6 TDI: EGR/injector issues, also Dieselgate-affected"),
+
+    # Ford EcoBoost 1.0 — head gasket / coolant mixing with oil
+    ("1.0 ecoboost", "ford",  "1.0 EcoBoost: head gasket failure, coolant leaks into oil"),
+    ("1.0 scti",     "ford",  "1.0 EcoBoost (SCTi): head gasket failure risk"),
+
+    # Alfa Romeo / Fiat 1.4 TB MultiAir
+    ("1.4 tb multiair", None, "1.4 TB MultiAir: valve actuator failures, expensive parts"),
+
+    # Opel / Vauxhall 1.6 CDTI — timing chain
+    ("1.6 cdti", "opel",      "1.6 CDTI: timing chain tensioner failure, engine damage"),
+]
+
+# ─────────────────────────────────────────────────────────────
 # Data model
 # ─────────────────────────────────────────────────────────────
 
@@ -109,11 +156,18 @@ class CarListing:
     location: str
     url: str
     images: list[str] = field(default_factory=list)
-    # computed
+    # computed by ROI scorer
     roi_score: float = 0.0
     estimated_resale: int = 0
     estimated_profit: int = 0
     roi_reasons: list[str] = field(default_factory=list)
+    # engine blacklist check
+    blacklisted: bool = False
+    blacklist_reason: str = ""
+    # mechanic agent verdict
+    mechanic_verdict: str = ""          # "BUY" | "INSPECT" | "AVOID" | ""
+    mechanic_issues: list[str] = field(default_factory=list)
+    mechanic_notes: str = ""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -533,6 +587,201 @@ def render_results(listings: list[CarListing], console: Console, top_n: int = 20
         )
 
 
+# ─────────────────────────────────────────────────────────────
+# Engine blacklist checker
+# ─────────────────────────────────────────────────────────────
+
+def apply_blacklist(listings: list[CarListing]) -> list[CarListing]:
+    """Mark listings whose engine matches a known-problematic pattern."""
+    for car in listings:
+        title_lower = car.title.lower()
+        for keyword, brand_filter, reason in ENGINE_BLACKLIST:
+            if keyword in title_lower:
+                if brand_filter is None or brand_filter == car.brand:
+                    car.blacklisted = True
+                    car.blacklist_reason = reason
+                    # Also penalise score heavily
+                    car.roi_score = max(0.0, car.roi_score - 60)
+                    break
+    return listings
+
+
+# ─────────────────────────────────────────────────────────────
+# Mechanic Agent — Claude-powered expert review
+# ─────────────────────────────────────────────────────────────
+
+MECHANIC_SYSTEM = """\
+You are an expert used-car dealer in France with 25 years of experience and a background as a \
+top automotive mechanic. You have an encyclopedic knowledge of:
+- Common mechanical failures by make, model, engine, year, and mileage bracket
+- Reliability data for all cars sold in France since 2000
+- Resale market dynamics in Île-de-France
+- Which cars are cheap to repair (parts availability, labour hours) vs money pits
+- Hidden red flags: trim combos that signal fleet use, suspicious mileage, structural risk by age
+
+Your task: review a batch of used-car listings and give a verdict for each one.
+
+For every listing return a JSON object with exactly these keys:
+  "ad_id"    : the listing's ad_id (string, unchanged)
+  "verdict"  : one of "BUY" | "INSPECT" | "AVOID"
+  "issues"   : array of strings — known mechanical or reliability issues for this exact \
+engine/year/mileage combo. Empty array if none.
+  "notes"    : 1-2 sentence dealer commentary (what to check, why it's interesting or risky)
+
+Verdict guide:
+  BUY     — solid car, known reliable engine, price is attractive, no major known issues
+  INSPECT — interesting deal but has known issues that require professional inspection before buying
+  AVOID   — known show-stopper defect, money pit, or the price makes no economic sense
+
+Return ONLY a JSON array of objects, no prose, no markdown fences.
+"""
+
+class MechanicAgent:
+    """Uses Claude to review car listings as an expert mechanic/dealer."""
+
+    def __init__(self, console: Console):
+        self.console = console
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY environment variable not set. "
+                "Export it before running: export ANTHROPIC_API_KEY=sk-ant-..."
+            )
+        self.client = anthropic.Anthropic(api_key=api_key)
+
+    def review(self, listings: list[CarListing]) -> list[CarListing]:
+        """Send top listings to Claude for expert review. Returns listings with verdicts filled."""
+        if not listings:
+            return listings
+
+        # Build a compact representation for the prompt
+        cars_data = []
+        for car in listings:
+            cars_data.append({
+                "ad_id": car.ad_id,
+                "title": car.title,
+                "brand": car.brand,
+                "price_eur": car.price,
+                "year": car.year,
+                "mileage_km": car.mileage,
+                "fuel": car.fuel,
+                "gearbox": car.gearbox,
+                "estimated_resale_eur": car.estimated_resale,
+                "roi_score": car.roi_score,
+                "blacklisted": car.blacklisted,
+                "blacklist_reason": car.blacklist_reason,
+            })
+
+        user_msg = (
+            f"Here are {len(cars_data)} used-car listings from Île-de-France. "
+            f"Review each one and return your JSON verdict array.\n\n"
+            f"{json.dumps(cars_data, ensure_ascii=False, indent=2)}"
+        )
+
+        self.console.print(
+            f"\n[bold cyan]Mechanic Agent[/bold cyan] — asking Claude Opus 4.6 "
+            f"to review {len(listings)} listings..."
+        )
+
+        try:
+            with self.client.messages.stream(
+                model="claude-opus-4-6",
+                max_tokens=4096,
+                thinking={"type": "adaptive"},
+                system=MECHANIC_SYSTEM,
+                messages=[{"role": "user", "content": user_msg}],
+            ) as stream:
+                # Show a live spinner while streaming
+                full_text = ""
+                thinking_shown = False
+                for event in stream:
+                    if (
+                        hasattr(event, "type")
+                        and event.type == "content_block_start"
+                        and hasattr(event, "content_block")
+                        and event.content_block.type == "thinking"
+                        and not thinking_shown
+                    ):
+                        self.console.print("[dim]  ⟳ thinking...[/dim]")
+                        thinking_shown = True
+                    elif (
+                        hasattr(event, "type")
+                        and event.type == "content_block_delta"
+                        and hasattr(event, "delta")
+                        and event.delta.type == "text_delta"
+                    ):
+                        full_text += event.delta.text
+
+            verdicts = json.loads(full_text.strip())
+        except json.JSONDecodeError as e:
+            self.console.print(f"[red]Could not parse mechanic JSON: {e}[/red]")
+            return listings
+        except anthropic.APIError as e:
+            self.console.print(f"[red]Claude API error: {e}[/red]")
+            return listings
+
+        # Index listings by ad_id for fast lookup
+        listing_map = {car.ad_id: car for car in listings}
+        for v in verdicts:
+            car = listing_map.get(str(v.get("ad_id", "")))
+            if car:
+                car.mechanic_verdict = v.get("verdict", "")
+                car.mechanic_issues  = v.get("issues", [])
+                car.mechanic_notes   = v.get("notes", "")
+
+        self.console.print(
+            f"[green]  ✓ Mechanic review complete — "
+            f"{sum(1 for c in listings if c.mechanic_verdict == 'BUY')} BUY  "
+            f"{sum(1 for c in listings if c.mechanic_verdict == 'INSPECT')} INSPECT  "
+            f"{sum(1 for c in listings if c.mechanic_verdict == 'AVOID')} AVOID[/green]"
+        )
+        return listings
+
+
+def render_mechanic_report(listings: list[CarListing], console: Console):
+    """Print a detailed mechanic report for listings that have a verdict."""
+    reviewed = [c for c in listings if c.mechanic_verdict]
+    if not reviewed:
+        return
+
+    wide = Console(width=180)
+    wide.print("\n[bold cyan]══ Mechanic Expert Report ══[/bold cyan]\n")
+
+    verdict_order = {"BUY": 0, "INSPECT": 1, "AVOID": 2}
+    reviewed_sorted = sorted(reviewed, key=lambda c: (verdict_order.get(c.mechanic_verdict, 9), -c.roi_score))
+
+    for car in reviewed_sorted:
+        v = car.mechanic_verdict
+        colour = {"BUY": "green", "INSPECT": "yellow", "AVOID": "red"}.get(v, "white")
+        icon   = {"BUY": "✅", "INSPECT": "⚠️ ", "AVOID": "🚫"}.get(v, "❔")
+
+        km_part = f" · {car.mileage:,} km" if car.mileage else ""
+        profit_part = f"  →  est. [bold yellow]+€{car.estimated_profit:,}[/bold yellow]" if car.estimated_profit > 0 else ""
+        header = (
+            f"[{colour}]{icon}  {v}[/{colour}]  "
+            f"[bold]{car.title}[/bold]  ·  "
+            f"[bold green]€{car.price:,}[/bold green]{profit_part}"
+            f"  ·  {car.year or '?'}{km_part}"
+            f"  ·  [dim]{car.location}[/dim]"
+        )
+
+        body_lines = []
+        if car.blacklisted:
+            body_lines.append(f"[red bold]⛔ BLACKLISTED ENGINE:[/red bold] {car.blacklist_reason}")
+        if car.mechanic_issues:
+            body_lines.append("[bold]Known issues:[/bold]  " + "  •  ".join(car.mechanic_issues))
+        if car.mechanic_notes:
+            body_lines.append(f"[italic]{car.mechanic_notes}[/italic]")
+        body_lines.append(f"[dim]{car.url}[/dim]")
+
+        wide.print(Panel(
+            "\n".join(body_lines),
+            title=header,
+            border_style=colour,
+            padding=(0, 2),
+        ))
+
+
 def generate_mock_listings(n: int = 80) -> list[CarListing]:
     """Generate realistic mock listings for demo/testing."""
     random.seed(42)
@@ -626,6 +875,11 @@ def export_json(listings: list[CarListing], path: str):
             "estimated_resale": car.estimated_resale,
             "estimated_profit": car.estimated_profit,
             "roi_reasons": car.roi_reasons,
+            "blacklisted": car.blacklisted,
+            "blacklist_reason": car.blacklist_reason,
+            "mechanic_verdict": car.mechanic_verdict,
+            "mechanic_issues": car.mechanic_issues,
+            "mechanic_notes": car.mechanic_notes,
             "images": car.images,
         })
     with open(path, "w", encoding="utf-8") as f:
@@ -658,6 +912,10 @@ def main():
                         help="Export results to JSON file path")
     parser.add_argument("--demo", action="store_true",
                         help="Use mock data (no network required) — for testing")
+    parser.add_argument("--mechanic", action="store_true",
+                        help="Run Claude mechanic agent on top results (requires ANTHROPIC_API_KEY)")
+    parser.add_argument("--mechanic-top", type=int, default=15,
+                        help="How many top listings to send to the mechanic agent (default: 15)")
     args = parser.parse_args()
 
     console = Console()
@@ -698,11 +956,30 @@ def main():
     console.print("[bold]Scoring ROI potential...[/bold]")
     scored = [scorer.score(car) for car in listings]
 
+    # ── Engine blacklist ──────────────────────────────────────
+    scored = apply_blacklist(scored)
+    n_blacklisted = sum(1 for c in scored if c.blacklisted)
+    if n_blacklisted:
+        console.print(
+            f"[red bold]⛔ {n_blacklisted} listing(s) flagged by engine blacklist "
+            f"(score penalised -60)[/red bold]"
+        )
+
     if args.min_score > 0:
         scored = [c for c in scored if c.roi_score >= args.min_score]
         console.print(f"[dim]After score filter (≥{args.min_score}): {len(scored)} listings[/dim]")
 
     render_results(scored, console, top_n=args.top)
+
+    # ── Mechanic agent ────────────────────────────────────────
+    if args.mechanic:
+        top_for_review = sorted(scored, key=lambda c: c.roi_score, reverse=True)[:args.mechanic_top]
+        try:
+            agent = MechanicAgent(console)
+            top_for_review = agent.review(top_for_review)
+            render_mechanic_report(top_for_review, console)
+        except RuntimeError as e:
+            console.print(f"[red]{e}[/red]")
 
     if args.export:
         sorted_all = sorted(scored, key=lambda x: x.roi_score, reverse=True)
