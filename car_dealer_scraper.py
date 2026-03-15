@@ -637,52 +637,68 @@ Return ONLY a JSON array of objects, no prose, no markdown fences.
 
 class MechanicAgent:
     """
-    Free LLM-powered expert mechanic/dealer review.
+    LLM-powered expert mechanic/dealer review.
 
-    Supported providers (all free):
-      ollama  — local models via Ollama (http://localhost:11434). Zero cost, zero sign-up.
-                Install: https://ollama.com  then: ollama pull mistral
-      groq    — Groq cloud free tier (generous daily limits).
-                Free key: https://console.groq.com  then: export GROQ_API_KEY=gsk_...
+    Supported providers:
+      openrouter — OpenRouter (default). Use your existing Claude/OpenAI subscription
+                   or pay-per-use. Best model: anthropic/claude-opus-4-6
+                   Free key: https://openrouter.ai  then: export OPENROUTER_API_KEY=sk-or-...
+      ollama     — Local Ollama, 100% free, no account.
+                   Install: https://ollama.com  then: ollama pull mistral
+      groq       — Groq cloud free tier (generous daily limits).
+                   Free key: https://console.groq.com  then: export GROQ_API_KEY=gsk_...
     """
 
     PROVIDERS = {
+        "openrouter": {
+            "base_url": "https://openrouter.ai/api/v1",
+            # Claude Opus 4.6 — best reasoning + deepest automotive domain knowledge
+            "default_model": "anthropic/claude-opus-4-6",
+            "env_var": "OPENROUTER_API_KEY",
+            "extra_headers": {
+                "HTTP-Referer": "https://github.com/faycaltaha/coffeet",
+                "X-Title": "Car Dealer ROI Scanner",
+            },
+        },
         "ollama": {
             "base_url": "http://localhost:11434/v1",
             "default_model": "mistral",
-            "api_key": "ollama",          # Ollama ignores the key but the header is required
             "env_var": None,
+            "api_key": "ollama",
+            "extra_headers": {},
         },
         "groq": {
             "base_url": "https://api.groq.com/openai/v1",
             "default_model": "llama-3.3-70b-versatile",
-            "api_key": None,              # read from GROQ_API_KEY
             "env_var": "GROQ_API_KEY",
+            "extra_headers": {},
         },
     }
 
-    def __init__(self, console: Console, provider: str = "ollama", model: str = ""):
+    def __init__(self, console: Console, provider: str = "openrouter", model: str = ""):
         self.console = console
         if provider not in self.PROVIDERS:
             raise RuntimeError(f"Unknown provider '{provider}'. Choose: {list(self.PROVIDERS)}")
 
         cfg = self.PROVIDERS[provider]
-        self.provider   = provider
-        self.base_url   = cfg["base_url"]
-        self.model      = model or cfg["default_model"]
+        self.provider      = provider
+        self.base_url      = cfg["base_url"]
+        self.model         = model or cfg["default_model"]
+        self.extra_headers = cfg.get("extra_headers", {})
 
         # Resolve API key
-        if cfg["env_var"]:
-            api_key = os.environ.get(cfg["env_var"])
+        env_var = cfg.get("env_var")
+        if env_var:
+            api_key = os.environ.get(env_var)
             if not api_key:
-                raise RuntimeError(
-                    f"Provider '{provider}' requires {cfg['env_var']}.\n"
-                    f"Get a free key at https://console.groq.com then:\n"
-                    f"  export {cfg['env_var']}=gsk_..."
-                )
+                setup = {
+                    "openrouter": "Get a free key at https://openrouter.ai\n  export OPENROUTER_API_KEY=sk-or-...",
+                    "groq":       "Get a free key at https://console.groq.com\n  export GROQ_API_KEY=gsk_...",
+                }.get(provider, f"export {env_var}=...")
+                raise RuntimeError(f"Provider '{provider}' requires {env_var}.\n{setup}")
             self.api_key = api_key
         else:
-            self.api_key = cfg["api_key"]
+            self.api_key = cfg.get("api_key", "no-key")
 
     def _chat(self, user_msg: str) -> str:
         """Call the OpenAI-compatible /chat/completions endpoint."""
@@ -698,6 +714,7 @@ class MechanicAgent:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
+            **self.extra_headers,
         }
         resp = httpx.post(
             f"{self.base_url}/chat/completions",
@@ -749,11 +766,12 @@ class MechanicAgent:
             if self.provider == "ollama":
                 self.console.print(
                     "[red]Cannot reach Ollama. Is it running?\n"
-                    "  Start it with: ollama serve\n"
-                    "  Pull a model :  ollama pull mistral[/red]"
+                    "  Install : https://ollama.com\n"
+                    "  Start   : ollama serve\n"
+                    "  Model   : ollama pull mistral[/red]"
                 )
             else:
-                self.console.print(f"[red]Network error reaching {self.provider}.[/red]")
+                self.console.print(f"[red]Network error reaching {self.provider} ({self.base_url}).[/red]")
             return listings
         except httpx.HTTPStatusError as e:
             self.console.print(f"[red]{self.provider} API error {e.response.status_code}: {e.response.text[:200]}[/red]")
@@ -978,10 +996,15 @@ def main():
                         help="Run LLM mechanic agent on top results (free — uses Ollama or Groq)")
     parser.add_argument("--mechanic-top", type=int, default=15,
                         help="How many top listings to send to the mechanic agent (default: 15)")
-    parser.add_argument("--llm-provider", choices=["ollama", "groq"], default="ollama",
-                        help="LLM provider: ollama (local, free) or groq (cloud free tier). Default: ollama")
+    parser.add_argument("--llm-provider", choices=["openrouter", "ollama", "groq"],
+                        default="openrouter",
+                        help="LLM provider (default: openrouter). "
+                             "openrouter=best quality via OPENROUTER_API_KEY, "
+                             "ollama=local free, groq=cloud free tier")
     parser.add_argument("--llm-model", type=str, default="",
-                        help="Model name override (default: mistral for ollama, llama-3.3-70b-versatile for groq)")
+                        help="Model override. Default per provider: "
+                             "openrouter→anthropic/claude-opus-4-6, "
+                             "ollama→mistral, groq→llama-3.3-70b-versatile")
     args = parser.parse_args()
 
     console = Console()
