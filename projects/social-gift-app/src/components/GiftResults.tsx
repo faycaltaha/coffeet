@@ -1,6 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import type { AnalysisResult, GiftIdea } from "@/types";
+import { amazonUrl, fnacUrl } from "@/lib/affiliate";
+
+const AMAZON_TAG = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
 
 const CATEGORY_COLORS: Record<string, string> = {
   experience: "bg-amber-100 text-amber-700",
@@ -16,18 +20,32 @@ const CATEGORY_COLORS: Record<string, string> = {
   default: "bg-gray-100 text-gray-700",
 };
 
+const CARD_EMOJIS = ["🎁", "🎀", "💝", "✨", "🌟", "💫", "🎊", "🛍️"];
+
 function categoryColor(cat: string) {
   return CATEGORY_COLORS[cat.toLowerCase()] ?? CATEGORY_COLORS.default;
 }
 
-function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(gift.searchQuery)}`;
+/** Extract the lower bound of a price range like "€30–€75" → 30 */
+function parseLowerPrice(range: string): number {
+  const match = range.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
 
+const BUDGET_FILTERS = [
+  { label: "All", max: Infinity },
+  { label: "< €50", max: 50 },
+  { label: "< €100", max: 100 },
+  { label: "< €200", max: 200 },
+];
+
+function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col gap-3">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col gap-3 group">
+      {/* Title row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{["🎁", "🎀", "💝", "✨", "🌟", "💫", "🎊", "🛍️"][index % 8]}</span>
+          <span className="text-2xl">{CARD_EMOJIS[index % CARD_EMOJIS.length]}</span>
           <h3 className="font-bold text-gray-900 leading-snug">{gift.title}</h3>
         </div>
         <span className="shrink-0 text-sm font-semibold text-brand-600 bg-brand-50 px-3 py-1 rounded-full">
@@ -35,8 +53,10 @@ function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
         </span>
       </div>
 
+      {/* Description */}
       <p className="text-gray-600 text-sm leading-relaxed">{gift.description}</p>
 
+      {/* Tags */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${categoryColor(gift.category)}`}>
           {gift.category}
@@ -44,14 +64,25 @@ function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
         <span className="text-xs text-gray-400 italic">{gift.reason}</span>
       </div>
 
-      <a
-        href={searchUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 transition"
-      >
-        Find this gift →
-      </a>
+      {/* Affiliate CTAs */}
+      <div className="mt-auto flex gap-2 pt-1">
+        <a
+          href={amazonUrl(gift.searchQuery, AMAZON_TAG)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 text-center py-2 rounded-xl text-sm font-semibold bg-amber-400 hover:bg-amber-500 text-amber-900 transition shadow-sm"
+        >
+          🛒 Amazon.fr
+        </a>
+        <a
+          href={fnacUrl(gift.searchQuery)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 text-center py-2 rounded-xl text-sm font-semibold bg-yellow-50 hover:bg-yellow-100 text-yellow-800 border border-yellow-200 transition"
+        >
+          🟡 Fnac
+        </a>
+      </div>
     </div>
   );
 }
@@ -63,6 +94,12 @@ interface Props {
 }
 
 export default function GiftResults({ result, recipientName, onReset }: Props) {
+  const [maxBudget, setMaxBudget] = useState(Infinity);
+
+  const filtered = result.giftIdeas.filter(
+    (g) => parseLowerPrice(g.priceRange) < maxBudget
+  );
+
   return (
     <div className="space-y-6">
       {/* Profile summary */}
@@ -81,17 +118,47 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
         )}
       </div>
 
+      {/* Budget filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-semibold text-gray-500 mr-1">Filter:</span>
+        {BUDGET_FILTERS.map((f) => (
+          <button
+            key={f.label}
+            onClick={() => setMaxBudget(f.max)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition border ${
+              maxBudget === f.max
+                ? "bg-brand-500 text-white border-brand-500 shadow"
+                : "bg-white text-gray-600 border-gray-200 hover:border-brand-300"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+        <span className="ml-auto text-xs text-gray-400">{filtered.length} ideas</span>
+      </div>
+
       {/* Gift grid */}
       <div>
         <h2 className="text-lg font-bold text-gray-900 mb-4">
-          🎁 {result.giftIdeas.length} Perfect Gift Ideas
+          🎁 {filtered.length} Perfect Gift Ideas
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {result.giftIdeas.map((gift, i) => (
-            <GiftCard key={i} gift={gift} index={i} />
-          ))}
-        </div>
+        {filtered.length === 0 ? (
+          <p className="text-center text-gray-400 text-sm py-8">
+            No gifts in this range. Try a higher budget filter.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {filtered.map((gift, i) => (
+              <GiftCard key={i} gift={gift} index={i} />
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Affiliate disclaimer */}
+      <p className="text-xs text-gray-400 text-center">
+        Amazon links may include an affiliate tag — we earn a small commission at no extra cost to you.
+      </p>
 
       {/* Reset */}
       <button
