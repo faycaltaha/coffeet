@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import type { AnalyzeRequest, AnalyzeResponse, AnalysisResult } from "@/types";
+import type { AnalyzeRequest, AnalyzeResponse, AnalysisResult, GiftIdea } from "@/types";
+
+// Keywords that flag a gift as haram — checked against title + description + searchQuery
+const HARAM_KEYWORDS = [
+  // Alcohol
+  "alcohol", "wine", "beer", "whisky", "whiskey", "vodka", "rum", "gin", "champagne",
+  "prosecco", "cocktail", "spirits", "liquor", "brandy", "bourbon", "sake", "mead",
+  // Tobacco & smoking
+  "tobacco", "cigarette", "cigar", "vape", "vaping", "hookah", "shisha", "nicotine",
+  "e-cigarette", "smoke kit",
+  // Drugs
+  "cannabis", "marijuana", "weed", "cbd", "thc", "drug",
+  // Pork & non-halal food
+  "pork", "bacon", "ham", "prosciutto", "salami", "chorizo", "lard", "pepperoni",
+  "charcuterie", "gelatin",
+  // Adult / gambling
+  "lingerie", "sex", "adult", "erotic", "porn", "gambling", "casino", "lottery",
+];
+
+function isHaram(gift: GiftIdea): boolean {
+  const text = `${gift.title} ${gift.description} ${gift.searchQuery}`.toLowerCase();
+  return HARAM_KEYWORDS.some((kw) => text.includes(kw));
+}
+
+function filterHalal(gifts: GiftIdea[]): GiftIdea[] {
+  return gifts.filter((g) => !isHaram(g));
+}
 
 const PLATFORM_URLS: Record<string, (handle: string) => string> = {
   instagram: (h) => `https://www.instagram.com/${h}/`,
@@ -34,7 +60,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
     .map((p) => `- ${p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}: ${PLATFORM_URLS[p.platform](p.handle)}`)
     .join("\n");
 
-  const systemPrompt = `You are GiftSense, an expert gift advisor. Your job is to:
+  const systemPrompt = `You are GiftSense, an expert halal-friendly gift advisor. Your job is to:
 1. Use the web_search tool to look up each social media profile provided
 2. Analyze the public content (posts, bio, highlights, saved content) to understand the person's interests, hobbies, aesthetic preferences, and lifestyle
 3. Generate highly personalised gift recommendations
@@ -46,6 +72,17 @@ When searching profiles, look for:
 - Activities and hobbies
 - Aesthetic style (minimalist, bohemian, sporty, etc.)
 - Food, travel, or cultural preferences
+
+STRICT CONTENT RULES — NEVER suggest anything involving:
+- Alcohol, wine, beer, spirits, or any intoxicating beverages
+- Tobacco, cigarettes, cigars, vapes, hookahs, or smoking accessories
+- Drugs, cannabis, CBD products, or any controlled substances
+- Pork, gelatin of unknown origin, or non-halal food products
+- Adult/sexual content, lingerie, or explicit material
+- Gambling, lottery, or games of chance
+- Any content that could be considered haram (forbidden in Islam)
+
+If the person's profile interests point toward any of the above, substitute with a halal alternative in the same spirit (e.g. mocktail kit instead of cocktail kit, halal snack box instead of charcuterie).
 
 Always respond with VALID JSON only (no markdown fences) in this exact structure:
 {
@@ -146,6 +183,9 @@ Search each profile, identify their interests, then generate gift ideas. Return 
     }
 
     const analysisResult: AnalysisResult = JSON.parse(jsonMatch[0]);
+
+    // Safety net: strip any haram items the AI may have slipped through
+    analysisResult.giftIdeas = filterHalal(analysisResult.giftIdeas);
 
     return NextResponse.json({ success: true, data: analysisResult });
   } catch (err) {
