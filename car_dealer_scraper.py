@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-import anthropic
 import httpx
 from rich.console import Console
 from rich.panel import Panel
@@ -637,27 +636,84 @@ Return ONLY a JSON array of objects, no prose, no markdown fences.
 """
 
 class MechanicAgent:
-    """Uses Claude to review car listings as an expert mechanic/dealer."""
+    """
+    Free LLM-powered expert mechanic/dealer review.
 
-    def __init__(self, console: Console):
+    Supported providers (all free):
+      ollama  — local models via Ollama (http://localhost:11434). Zero cost, zero sign-up.
+                Install: https://ollama.com  then: ollama pull mistral
+      groq    — Groq cloud free tier (generous daily limits).
+                Free key: https://console.groq.com  then: export GROQ_API_KEY=gsk_...
+    """
+
+    PROVIDERS = {
+        "ollama": {
+            "base_url": "http://localhost:11434/v1",
+            "default_model": "mistral",
+            "api_key": "ollama",          # Ollama ignores the key but the header is required
+            "env_var": None,
+        },
+        "groq": {
+            "base_url": "https://api.groq.com/openai/v1",
+            "default_model": "llama-3.3-70b-versatile",
+            "api_key": None,              # read from GROQ_API_KEY
+            "env_var": "GROQ_API_KEY",
+        },
+    }
+
+    def __init__(self, console: Console, provider: str = "ollama", model: str = ""):
         self.console = console
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY environment variable not set. "
-                "Export it before running: export ANTHROPIC_API_KEY=sk-ant-..."
-            )
-        self.client = anthropic.Anthropic(api_key=api_key)
+        if provider not in self.PROVIDERS:
+            raise RuntimeError(f"Unknown provider '{provider}'. Choose: {list(self.PROVIDERS)}")
+
+        cfg = self.PROVIDERS[provider]
+        self.provider   = provider
+        self.base_url   = cfg["base_url"]
+        self.model      = model or cfg["default_model"]
+
+        # Resolve API key
+        if cfg["env_var"]:
+            api_key = os.environ.get(cfg["env_var"])
+            if not api_key:
+                raise RuntimeError(
+                    f"Provider '{provider}' requires {cfg['env_var']}.\n"
+                    f"Get a free key at https://console.groq.com then:\n"
+                    f"  export {cfg['env_var']}=gsk_..."
+                )
+            self.api_key = api_key
+        else:
+            self.api_key = cfg["api_key"]
+
+    def _chat(self, user_msg: str) -> str:
+        """Call the OpenAI-compatible /chat/completions endpoint."""
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": MECHANIC_SYSTEM},
+                {"role": "user",   "content": user_msg},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 4096,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        resp = httpx.post(
+            f"{self.base_url}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=120,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 
     def review(self, listings: list[CarListing]) -> list[CarListing]:
-        """Send top listings to Claude for expert review. Returns listings with verdicts filled."""
         if not listings:
             return listings
 
-        # Build a compact representation for the prompt
-        cars_data = []
-        for car in listings:
-            cars_data.append({
+        cars_data = [
+            {
                 "ad_id": car.ad_id,
                 "title": car.title,
                 "brand": car.brand,
@@ -670,7 +726,9 @@ class MechanicAgent:
                 "roi_score": car.roi_score,
                 "blacklisted": car.blacklisted,
                 "blacklist_reason": car.blacklist_reason,
-            })
+            }
+            for car in listings
+        ]
 
         user_msg = (
             f"Here are {len(cars_data)} used-car listings from Île-de-France. "
@@ -679,48 +737,52 @@ class MechanicAgent:
         )
 
         self.console.print(
-            f"\n[bold cyan]Mechanic Agent[/bold cyan] — asking Claude Opus 4.6 "
-            f"to review {len(listings)} listings..."
+            f"\n[bold cyan]Mechanic Agent[/bold cyan] — "
+            f"[dim]{self.provider}[/dim] / [dim]{self.model}[/dim] · "
+            f"reviewing {len(listings)} listings  [green](free)[/green]"
         )
 
         try:
-            with self.client.messages.stream(
-                model="claude-opus-4-6",
-                max_tokens=4096,
-                thinking={"type": "adaptive"},
-                system=MECHANIC_SYSTEM,
-                messages=[{"role": "user", "content": user_msg}],
-            ) as stream:
-                # Show a live spinner while streaming
-                full_text = ""
-                thinking_shown = False
-                for event in stream:
-                    if (
-                        hasattr(event, "type")
-                        and event.type == "content_block_start"
-                        and hasattr(event, "content_block")
-                        and event.content_block.type == "thinking"
-                        and not thinking_shown
-                    ):
-                        self.console.print("[dim]  ⟳ thinking...[/dim]")
-                        thinking_shown = True
-                    elif (
-                        hasattr(event, "type")
-                        and event.type == "content_block_delta"
-                        and hasattr(event, "delta")
-                        and event.delta.type == "text_delta"
-                    ):
-                        full_text += event.delta.text
-
-            verdicts = json.loads(full_text.strip())
-        except json.JSONDecodeError as e:
-            self.console.print(f"[red]Could not parse mechanic JSON: {e}[/red]")
+            with self.console.status("[dim]  ⟳ LLM thinking...[/dim]"):
+                raw = self._chat(user_msg)
+        except httpx.ConnectError:
+            if self.provider == "ollama":
+                self.console.print(
+                    "[red]Cannot reach Ollama. Is it running?\n"
+                    "  Start it with: ollama serve\n"
+                    "  Pull a model :  ollama pull mistral[/red]"
+                )
+            else:
+                self.console.print(f"[red]Network error reaching {self.provider}.[/red]")
             return listings
-        except anthropic.APIError as e:
-            self.console.print(f"[red]Claude API error: {e}[/red]")
+        except httpx.HTTPStatusError as e:
+            self.console.print(f"[red]{self.provider} API error {e.response.status_code}: {e.response.text[:200]}[/red]")
             return listings
 
-        # Index listings by ad_id for fast lookup
+        # Strip optional markdown fences the model might add
+        text = raw.strip()
+        if text.startswith("```"):
+            text = "\n".join(text.split("\n")[1:])
+        if text.endswith("```"):
+            text = "\n".join(text.split("\n")[:-1])
+        text = text.strip()
+
+        try:
+            verdicts = json.loads(text)
+        except json.JSONDecodeError:
+            # Try to extract a JSON array from within the response
+            import re
+            m = re.search(r"\[.*\]", text, re.DOTALL)
+            if m:
+                try:
+                    verdicts = json.loads(m.group())
+                except json.JSONDecodeError:
+                    self.console.print("[red]Could not parse mechanic JSON response.[/red]")
+                    return listings
+            else:
+                self.console.print("[red]Could not parse mechanic JSON response.[/red]")
+                return listings
+
         listing_map = {car.ad_id: car for car in listings}
         for v in verdicts:
             car = listing_map.get(str(v.get("ad_id", "")))
@@ -730,7 +792,7 @@ class MechanicAgent:
                 car.mechanic_notes   = v.get("notes", "")
 
         self.console.print(
-            f"[green]  ✓ Mechanic review complete — "
+            f"[green]  ✓ Done — "
             f"{sum(1 for c in listings if c.mechanic_verdict == 'BUY')} BUY  "
             f"{sum(1 for c in listings if c.mechanic_verdict == 'INSPECT')} INSPECT  "
             f"{sum(1 for c in listings if c.mechanic_verdict == 'AVOID')} AVOID[/green]"
@@ -913,9 +975,13 @@ def main():
     parser.add_argument("--demo", action="store_true",
                         help="Use mock data (no network required) — for testing")
     parser.add_argument("--mechanic", action="store_true",
-                        help="Run Claude mechanic agent on top results (requires ANTHROPIC_API_KEY)")
+                        help="Run LLM mechanic agent on top results (free — uses Ollama or Groq)")
     parser.add_argument("--mechanic-top", type=int, default=15,
                         help="How many top listings to send to the mechanic agent (default: 15)")
+    parser.add_argument("--llm-provider", choices=["ollama", "groq"], default="ollama",
+                        help="LLM provider: ollama (local, free) or groq (cloud free tier). Default: ollama")
+    parser.add_argument("--llm-model", type=str, default="",
+                        help="Model name override (default: mistral for ollama, llama-3.3-70b-versatile for groq)")
     args = parser.parse_args()
 
     console = Console()
@@ -975,7 +1041,7 @@ def main():
     if args.mechanic:
         top_for_review = sorted(scored, key=lambda c: c.roi_score, reverse=True)[:args.mechanic_top]
         try:
-            agent = MechanicAgent(console)
+            agent = MechanicAgent(console, provider=args.llm_provider, model=args.llm_model)
             top_for_review = agent.review(top_for_review)
             render_mechanic_report(top_for_review, console)
         except RuntimeError as e:
