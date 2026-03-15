@@ -686,22 +686,23 @@ class MechanicAgent:
         self.model         = model or cfg["default_model"]
         self.extra_headers = cfg.get("extra_headers", {})
 
-        # Resolve API key
+        # Resolve API key — store lazily, validated only when _chat() is called
         env_var = cfg.get("env_var")
+        self._env_var  = env_var
+        self._provider = provider
         if env_var:
-            api_key = os.environ.get(env_var)
-            if not api_key:
-                setup = {
-                    "openrouter": "Get a free key at https://openrouter.ai\n  export OPENROUTER_API_KEY=sk-or-...",
-                    "groq":       "Get a free key at https://console.groq.com\n  export GROQ_API_KEY=gsk_...",
-                }.get(provider, f"export {env_var}=...")
-                raise RuntimeError(f"Provider '{provider}' requires {env_var}.\n{setup}")
-            self.api_key = api_key
+            self.api_key = os.environ.get(env_var, "")
         else:
             self.api_key = cfg.get("api_key", "no-key")
 
     def _chat(self, user_msg: str) -> str:
         """Call the OpenAI-compatible /chat/completions endpoint."""
+        if not self.api_key and self._env_var:
+            setup = {
+                "openrouter": "Get a free key at https://openrouter.ai\n  export OPENROUTER_API_KEY=sk-or-...",
+                "groq":       "Get a free key at https://console.groq.com\n  export GROQ_API_KEY=gsk_...",
+            }.get(self._provider, f"export {self._env_var}=...")
+            raise RuntimeError(f"Provider '{self._provider}' requires {self._env_var}.\n{setup}")
         payload = {
             "model": self.model,
             "messages": [
@@ -724,6 +725,49 @@ class MechanicAgent:
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
+
+    def review_mock(self, listings: list[CarListing]) -> list[CarListing]:
+        """Inject realistic pre-written verdicts — no API call, for demo/showcase only."""
+        mock_db = {
+            # title keyword → (verdict, issues, notes)
+            "duster":    ("BUY",     [],
+                          "The 1.5 dCi K9K engine is a Renault-Nissan workhorse — bulletproof past 300k km with regular oil changes. 4x4 version commands 15-20% premium on resale. At €3,900 this is a genuine buy."),
+            "classe a":  ("INSPECT", ["W176 CDI models: DPF clogging on short trips", "7-speed DCT wet clutch can shudder if serviced late"],
+                          "Good price for a Mercedes but the 180 CDI with 95k km is entering the DPF danger zone. Pull the maintenance history — if it's been city-driven, budget €600-800 for a forced regen or DPF replacement."),
+            "fiat 500":  ("INSPECT", ["5-speed robotised gearbox (Dualogic) notorious for jerky engagement and clutch wear", "Rust on rear arches from 7 years old"],
+                          "Lovely car that sells fast in Paris — but check under the rear arches for rust bubbles and test the Dualogic thoroughly. If manual gearbox, buy without hesitation at this price."),
+            "polo":      ("BUY",     ["1.2 TSI chain tensioner: check for rattling on cold start"],
+                          "VW Polo 1.2 TSI is one of the most sought-after city cars in IDF. Chain rattle on cold start is the only real concern — a €350 tensioner fix. Otherwise rock solid and sells in under a week on LBC."),
+            "golf":      ("INSPECT", ["1.6 TDI: EGR valve fouling (€200-400 fix)", "High mileage: timing belt + water pump service due if not documented", "Dieselgate software update may affect performance"],
+                          "Golf VII diesel at 153k km is a good workhorse but needs a documented service history. Insist on timing belt records — if unknown, budget €700 and factor it into your offer."),
+            "hyundai":   ("BUY",     [],
+                          "Hyundai i30 1.6 CRDi is criminally underrated on the French market — Korean build quality, cheap parts, and the diesel engine is genuinely reliable. Clean profit play at €4,100."),
+            "ibiza":     ("BUY",     ["1.0 EcoTSI: carbon build-up on intake valves around 80k km (direct injection)"],
+                          "SEAT Ibiza 1.0 EcoTSI is essentially a VW Polo in disguise at lower cost. Walnut-blast the intake if carbon build-up is present (~€150). Sells fast to young buyers — good flip candidate."),
+            "mazda":     ("BUY",     [],
+                          "Mazda CX-5 2.2 SkyActiv-D is one of the most reliable SUVs on the market — Mazda's own engine design with none of the PSA/VAG platform baggage. Strong resale, easy sell."),
+            "honda":     ("INSPECT", ["i-DTEC diesel: timing chain service interval at 150k km approaching", "DPF: sensitive to short urban trips"],
+                          "Honda Civic diesel is excellent mechanically but at 64k km and 2018 it's in the DPF sweet spot — fine if highway-driven, risky if city use. Ask for fuel consumption history as a proxy."),
+            "kangoo":    ("BUY",     ["dCi K9K: injector wear after 150k km — still within acceptable range at 116k"],
+                          "Kangoo dCi is a cash machine in IDF — tradespeople and families both want them, supply is tight. K9K diesel at 116k is young enough. Check for rust on the sliding door rails."),
+        }
+
+        for car in listings:
+            title_lower = car.title.lower()
+            matched = False
+            for keyword, (verdict, issues, notes) in mock_db.items():
+                if keyword in title_lower:
+                    car.mechanic_verdict = verdict
+                    car.mechanic_issues  = issues
+                    car.mechanic_notes   = notes
+                    matched = True
+                    break
+            if not matched:
+                car.mechanic_verdict = "INSPECT"
+                car.mechanic_issues  = ["Insufficient data for this model/engine combination"]
+                car.mechanic_notes   = "Standard inspection recommended. Verify service history and request a pre-purchase diagnostic."
+
+        return listings
 
     def review(self, listings: list[CarListing]) -> list[CarListing]:
         if not listings:
@@ -993,7 +1037,9 @@ def main():
     parser.add_argument("--demo", action="store_true",
                         help="Use mock data (no network required) — for testing")
     parser.add_argument("--mechanic", action="store_true",
-                        help="Run LLM mechanic agent on top results (free — uses Ollama or Groq)")
+                        help="Run LLM mechanic agent on top results (requires --llm-provider key)")
+    parser.add_argument("--mechanic-mock", action="store_true",
+                        help="Show example mechanic report with pre-written verdicts (no API key needed)")
     parser.add_argument("--mechanic-top", type=int, default=15,
                         help="How many top listings to send to the mechanic agent (default: 15)")
     parser.add_argument("--llm-provider", choices=["openrouter", "ollama", "groq"],
@@ -1061,11 +1107,15 @@ def main():
     render_results(scored, console, top_n=args.top)
 
     # ── Mechanic agent ────────────────────────────────────────
-    if args.mechanic:
+    if args.mechanic or args.mechanic_mock:
         top_for_review = sorted(scored, key=lambda c: c.roi_score, reverse=True)[:args.mechanic_top]
         try:
             agent = MechanicAgent(console, provider=args.llm_provider, model=args.llm_model)
-            top_for_review = agent.review(top_for_review)
+            if args.mechanic_mock:
+                console.print("\n[bold cyan]Mechanic Agent[/bold cyan] — [yellow]EXAMPLE MODE[/yellow] (pre-written verdicts, no API call)")
+                top_for_review = agent.review_mock(top_for_review)
+            else:
+                top_for_review = agent.review(top_for_review)
             render_mechanic_report(top_for_review, console)
         except RuntimeError as e:
             console.print(f"[red]{e}[/red]")
