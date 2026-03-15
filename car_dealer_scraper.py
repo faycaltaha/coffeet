@@ -470,58 +470,67 @@ def render_results(listings: list[CarListing], console: Console, top_n: int = 20
         console.print("[red]No listings found.[/red]")
         return
 
-    # Sort by ROI score desc
+    # Force wide console to prevent wrapping
+    wide = Console(width=180)
+
     sorted_listings = sorted(listings, key=lambda x: x.roi_score, reverse=True)[:top_n]
 
+    wide.print(f"\n[bold cyan]  Top {len(sorted_listings)} Cars — Best ROI Potential"
+               f"  ·  Île-de-France  ·  leboncoin.fr (private sellers)[/bold cyan]\n")
+
     table = Table(
-        title=f"\n[bold cyan]Top {len(sorted_listings)} Cars — Best ROI Potential[/bold cyan]\n"
-              f"[dim]Île-de-France · leboncoin.fr · private sellers[/dim]",
-        box=box.ROUNDED,
-        show_lines=True,
+        box=box.SIMPLE_HEAVY,
+        show_lines=False,
         header_style="bold magenta",
+        padding=(0, 1),
     )
 
-    table.add_column("#", style="dim", width=3)
-    table.add_column("Title", min_width=22, max_width=30)
-    table.add_column("Price", style="bold green", justify="right")
-    table.add_column("Est.\nResale", justify="right", style="cyan")
-    table.add_column("Profit\n(est.)", justify="right", style="bold yellow")
-    table.add_column("Year", justify="center")
-    table.add_column("km", justify="right")
-    table.add_column("Fuel", justify="center")
-    table.add_column("Location", max_width=14)
-    table.add_column("Score", justify="right", style="bold red")
-    table.add_column("Why buy?", max_width=35)
+    table.add_column("#",        style="dim",        width=3,  justify="right")
+    table.add_column("Title",    width=32)
+    table.add_column("Buy",      style="bold green", width=8,  justify="right")
+    table.add_column("Resale",   style="cyan",       width=8,  justify="right")
+    table.add_column("Profit",   style="bold yellow",width=8,  justify="right")
+    table.add_column("Year",     width=5,  justify="center")
+    table.add_column("km",       width=9,  justify="right")
+    table.add_column("Fuel",     width=9,  justify="center")
+    table.add_column("Location", width=20)
+    table.add_column("Score",    style="bold red",   width=6,  justify="right")
+    table.add_column("Signals",  width=55)
+
+    fuel_icons = {"diesel": "⛽ diesel", "essence": "⛽ essence", "hybride": "⚡ hybrid",
+                  "electrique": "⚡ EV", "gpl": "🔵 GPL"}
 
     for i, car in enumerate(sorted_listings, 1):
-        profit_text = f"€{car.estimated_profit:,}" if car.estimated_profit > 0 else "-"
-        resale_text = f"€{car.estimated_resale:,}" if car.estimated_resale > 0 else "-"
-        km_text = f"{car.mileage:,}" if car.mileage else "?"
-        year_text = str(car.year) if car.year else "?"
-        reasons_short = " · ".join(car.roi_reasons[:3])
+        profit_text  = f"+€{car.estimated_profit:,}" if car.estimated_profit > 0 else "—"
+        resale_text  = f"€{car.estimated_resale:,}"  if car.estimated_resale  > 0 else "—"
+        km_text      = f"{car.mileage:,} km"         if car.mileage            else "?"
+        year_text    = str(car.year)                  if car.year               else "?"
+        fuel_text    = fuel_icons.get(car.fuel, car.fuel or "?")
+        signals      = "  •  ".join(car.roi_reasons[:3])
 
         table.add_row(
             str(i),
-            car.title[:30],
+            car.title[:32],
             f"€{car.price:,}",
             resale_text,
             profit_text,
             year_text,
             km_text,
-            car.fuel or "?",
-            car.location,
+            fuel_text,
+            car.location[:20],
             str(car.roi_score),
-            reasons_short,
+            signals,
         )
 
-    console.print(table)
+    wide.print(table)
 
-    # Print URLs for top 10
-    console.print("\n[bold]Links to top listings:[/bold]")
+    wide.print("\n[bold]Direct links — top 10:[/bold]")
     for i, car in enumerate(sorted_listings[:10], 1):
-        profit_str = f" | est. +€{car.estimated_profit:,}" if car.estimated_profit > 0 else ""
-        console.print(f"  [dim]{i:2}.[/dim] [link={car.url}]{car.url}[/link]"
-                      f"  [dim]({car.title[:35]}, €{car.price:,}{profit_str})[/dim]")
+        profit_str = f"  →  est. profit [bold yellow]+€{car.estimated_profit:,}[/bold yellow]" if car.estimated_profit > 0 else ""
+        wide.print(
+            f"  [dim]{i:2}.[/dim]  [link={car.url}][cyan]{car.url}[/cyan][/link]"
+            f"  [dim]{car.title[:40]}  ·  €{car.price:,}{profit_str}[/dim]"
+        )
 
 
 def generate_mock_listings(n: int = 80) -> list[CarListing]:
