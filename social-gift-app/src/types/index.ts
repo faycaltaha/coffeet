@@ -1,0 +1,34 @@
+export interface SocialProfile {
+  platform: "instagram" | "tiktok" | "pinterest";
+  handle: string;
+}
+
+export interface GiftIdea {
+  title: string;
+  description: string;
+  priceRange: string;
+  category: string;
+  reason: string;
+  searchQuery: string;
+}
+
+export interface AnalysisResult {
+  profileSummary: string;
+  interests: string[];
+  giftIdeas: GiftIdea[];
+  occasion?: string;
+}
+
+export interface AnalyzeRequest {
+  profiles: SocialProfile[];
+  recipientName: string;
+  occasion: string;
+  budget: string;
+  relationship: string;
+}
+
+export interface AnalyzeResponse {
+  success: boolean;
+  data?: AnalysisResult;
+  error?: string;
+}
