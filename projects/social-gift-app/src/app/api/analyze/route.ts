@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisResult, GiftIdea } from "@/types";
 
 // Keywords that flag a gift as haram — checked against title + description + searchQuery
@@ -35,9 +35,9 @@ const PLATFORM_URLS: Record<string, (handle: string) => string> = {
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeResponse>> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ success: false, error: "API key not configured." }, { status: 500 });
+    return NextResponse.json({ success: false, error: "OpenRouter API key not configured." }, { status: 500 });
   }
 
   let body: AnalyzeRequest;
@@ -53,16 +53,23 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
     return NextResponse.json({ success: false, error: "At least one social profile is required." }, { status: 400 });
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey,
+    defaultHeaders: {
+      "HTTP-Referer": "https://coffeet.fr",
+      "X-Title": "Coffeet Gift Recommender",
+    },
+  });
 
-  // Build profile URL list for Claude to search
+  // Build profile URL list for the model to search
   const profileList = profiles
     .map((p) => `- ${p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}: ${PLATFORM_URLS[p.platform](p.handle)}`)
     .join("\n");
 
   const systemPrompt = `You are GiftSense, an expert halal-friendly gift advisor. Your job is to:
-1. Use the web_search tool to look up each social media profile provided
-2. Analyze the public content (posts, bio, highlights, saved content) to understand the person's interests, hobbies, aesthetic preferences, and lifestyle
+1. Search and browse each social media profile URL provided
+2. Analyse the public content (posts, bio, highlights, saved content) to understand the person's interests, hobbies, aesthetic preferences, and lifestyle
 3. Generate highly personalised gift recommendations
 
 When searching profiles, look for:
@@ -102,7 +109,7 @@ Always respond with VALID JSON only (no markdown fences) in this exact structure
 
 Generate 6–8 diverse gift ideas spanning different price points within the budget, ordered from most to least personalised.`;
 
-  const userMessage = `Please analyse these social media profiles and suggest gifts for ${recipientName}:
+  const userMessage = `Please search these social media profiles and suggest gifts for ${recipientName}:
 
 ${profileList}
 
@@ -111,67 +118,20 @@ Gift context:
 - Budget: ${budget}
 - Relationship: ${relationship}
 
-Search each profile, identify their interests, then generate gift ideas. Return only valid JSON.`;
+Search each profile URL, identify their interests, then generate gift ideas. Return only valid JSON.`;
 
   try {
-    // Use agentic loop with web search
-    const messages: Anthropic.MessageParam[] = [
-      { role: "user", content: userMessage },
-    ];
+    const response = await client.chat.completions.create({
+      model: "perplexity/sonar-pro",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      max_tokens: 4096,
+    });
 
-    let finalText = "";
-    let iterations = 0;
-    const MAX_ITERATIONS = 8;
+    const finalText = response.choices[0]?.message?.content ?? "";
 
-    while (iterations < MAX_ITERATIONS) {
-      iterations++;
-
-      const response = await client.messages.create({
-        model: "claude-opus-4-6",
-        max_tokens: 8192,
-        system: systemPrompt,
-        tools: [
-          { type: "web_search_20260209" as const, name: "web_search" },
-        ],
-        messages,
-      });
-
-      // Collect text blocks
-      const textBlocks = response.content.filter((b) => b.type === "text");
-      if (textBlocks.length > 0) {
-        finalText = textBlocks.map((b) => (b as Anthropic.TextBlock).text).join("\n");
-      }
-
-      if (response.stop_reason === "end_turn") {
-        break;
-      }
-
-      if (response.stop_reason === "pause_turn") {
-        messages.push({ role: "assistant", content: response.content });
-        continue;
-      }
-
-      // Handle tool use
-      if (response.stop_reason === "tool_use") {
-        messages.push({ role: "assistant", content: response.content });
-
-        const toolResults: Anthropic.ToolResultBlockParam[] = response.content
-          .filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")
-          .map((tool) => ({
-            type: "tool_result" as const,
-            tool_use_id: tool.id,
-            content: `Tool ${tool.name} executed with input: ${JSON.stringify(tool.input)}`,
-          }));
-
-        if (toolResults.length > 0) {
-          messages.push({ role: "user", content: toolResults });
-        }
-      } else {
-        break;
-      }
-    }
-
-    // Parse the JSON response
     if (!finalText) {
       return NextResponse.json({ success: false, error: "No response from AI." }, { status: 500 });
     }

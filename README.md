@@ -24,8 +24,8 @@ B2B outreach campaign targeting specialty cafés, premium restaurants, and luxur
 - **`semaine1–3/`** — weekly prospect email drafts (specialty cafés → restaurants → palaces)
 
 ### [`projects/social-gift-app/`](./projects/social-gift-app/)
-Web app that analyses public social media profiles (Instagram, TikTok, Pinterest) to generate personalised gift ideas using Claude AI.
-- **Stack:** Next.js 15 · TypeScript · Tailwind CSS · Claude Opus 4.6
+Web app that analyses public social media profiles (Instagram, TikTok, Pinterest) to generate personalised gift ideas using AI with built-in web search.
+- **Stack:** Next.js 15 · TypeScript · Tailwind CSS · OpenRouter (perplexity/sonar-pro)
 - **Run:** `cd projects/social-gift-app && cp .env.local.example .env.local && npm run dev`
 
 ---
