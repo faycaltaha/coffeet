@@ -39,9 +39,27 @@ const BUDGET_FILTERS = [
   { label: "< €200", max: 200 },
 ];
 
+const TREND_SOURCE_COLORS: Record<string, string> = {
+  "TikTok Viral": "bg-[#010101] text-white",
+  "Instagram Trending": "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
+  "Pinterest Popular": "bg-red-600 text-white",
+};
+
 function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
+  const trendColor = gift.trendSource
+    ? (TREND_SOURCE_COLORS[gift.trendSource] ?? "bg-orange-500 text-white")
+    : null;
+
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow flex flex-col gap-3 group">
+    <div className={`bg-white rounded-2xl p-5 shadow-sm border hover:shadow-md transition-shadow flex flex-col gap-3 group ${gift.trending ? "border-orange-300 ring-1 ring-orange-200" : "border-gray-100"}`}>
+      {/* Trending banner */}
+      {gift.trending && gift.trendSource && (
+        <div className={`-mx-5 -mt-5 px-4 py-1.5 rounded-t-2xl flex items-center gap-2 text-xs font-semibold ${trendColor}`}>
+          <span>🔥</span>
+          <span>Trending on {gift.trendSource.replace(" Viral", "").replace(" Trending", "").replace(" Popular", "")}</span>
+        </div>
+      )}
+
       {/* Title row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -95,10 +113,14 @@ interface Props {
 
 export default function GiftResults({ result, recipientName, onReset }: Props) {
   const [maxBudget, setMaxBudget] = useState(Infinity);
+  const [trendingOnly, setTrendingOnly] = useState(false);
 
-  const filtered = result.giftIdeas.filter(
-    (g) => parseLowerPrice(g.priceRange) < maxBudget
-  );
+  const hasTrending = result.giftIdeas.some((g) => g.trending);
+
+  const filtered = result.giftIdeas.filter((g) => {
+    if (trendingOnly && !g.trending) return false;
+    return parseLowerPrice(g.priceRange) < maxBudget;
+  });
 
   return (
     <div className="space-y-6">
@@ -118,9 +140,9 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
         )}
       </div>
 
-      {/* Budget filter */}
+      {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-semibold text-gray-500 mr-1">Filter:</span>
+        <span className="text-xs font-semibold text-gray-500 mr-1">Budget:</span>
         {BUDGET_FILTERS.map((f) => (
           <button
             key={f.label}
@@ -134,6 +156,18 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
             {f.label}
           </button>
         ))}
+        {hasTrending && (
+          <button
+            onClick={() => setTrendingOnly((v) => !v)}
+            className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold transition border flex items-center gap-1 ${
+              trendingOnly
+                ? "bg-orange-500 text-white border-orange-500 shadow"
+                : "bg-white text-orange-500 border-orange-300 hover:border-orange-400"
+            }`}
+          >
+            🔥 Trending only
+          </button>
+        )}
         <span className="ml-auto text-xs text-gray-400">{filtered.length} ideas</span>
       </div>
 

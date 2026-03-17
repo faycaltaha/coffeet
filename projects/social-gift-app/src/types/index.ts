@@ -10,6 +10,8 @@ export interface GiftIdea {
   category: string;
   reason: string;
   searchQuery: string;
+  trending?: boolean;
+  trendSource?: string;
 }
 
 export interface AnalysisResult {

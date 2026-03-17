@@ -71,7 +71,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
   const systemPrompt = `You are GiftSense, an expert halal-friendly gift advisor. Your job is to:
 1. Search and browse each social media profile URL provided
 2. Analyse the public content (posts, bio, highlights, saved content) to understand the person's interests, hobbies, aesthetic preferences, and lifestyle
-3. Generate highly personalised gift recommendations
+3. Search for currently trending gift products on TikTok, Instagram, and Pinterest that match the person's interests and the occasion
+4. Generate highly personalised gift recommendations, mixing profile-matched picks with trending viral products they may have already seen on their feed
 
 When searching profiles, look for:
 - Bio/description
@@ -80,6 +81,13 @@ When searching profiles, look for:
 - Activities and hobbies
 - Aesthetic style (minimalist, bohemian, sporty, etc.)
 - Food, travel, or cultural preferences
+
+When searching for trending products:
+- Search TikTok Shop, Instagram Shopping, and Pinterest trends for the person's interest categories
+- Search "trending gifts [category] [year]" and "viral [category] products TikTok [year]"
+- Identify products that are currently viral or widely shared on social media
+- Look for products that appear in gift guides, "things I bought" TikToks, or Pinterest boards
+- For each trending item found, note the platform where it is trending
 
 STRICT CONTENT RULES — NEVER suggest anything involving:
 - Alcohol, wine, beer, spirits, or any intoxicating beverages
@@ -103,12 +111,14 @@ Always respond with VALID JSON only (no markdown fences) in this exact structure
       "priceRange": "€XX–€XX",
       "category": "one of: experience|fashion|tech|beauty|food|books|home|sport|travel|art",
       "reason": "One sentence: why this matches their profile",
-      "searchQuery": "Google search query to find this gift online"
+      "searchQuery": "Google search query to find this gift online",
+      "trending": true or false,
+      "trendSource": "e.g. TikTok Viral, Instagram Trending, Pinterest Popular — or null if not trending"
     }
   ]
 }
 
-Generate 6–8 diverse gift ideas spanning different price points within the budget, ordered from most to least personalised.`;
+Generate 6–8 diverse gift ideas spanning different price points within the budget. Include at least 2–3 currently trending items if relevant. Order: trending items first, then most-personalised, then general.`;
 
   const interestsLine = interests && interests.length > 0
     ? `- Known interests: ${interests.join(", ")}`
@@ -124,7 +134,13 @@ Gift context:
 - Relationship: ${relationship}
 ${interestsLine}
 
-${interests && interests.length > 0 ? "Use the known interests as strong hints to guide your recommendations, and confirm or enrich them from the social media profiles." : "Search each profile URL, identify their interests, then generate gift ideas."} Return only valid JSON.`;
+Steps to follow:
+1. Browse each profile URL and identify their interests, style, and personality
+2. Search for products currently trending on TikTok, Instagram, and Pinterest that match their interests and the "${occasion}" occasion — use queries like "viral gift [interest] TikTok 2025", "trending [interest] gifts Instagram", "best gift [interest] Pinterest"
+3. Combine profile insights with trending products to generate personalised recommendations
+${interests && interests.length > 0 ? "4. Use the known interests as strong hints to guide both profile analysis and trend searches." : ""}
+
+Return only valid JSON.`;
 
   try {
     const response = await client.chat.completions.create({
