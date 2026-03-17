@@ -14,6 +14,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.27",
+    "framer-motion": "^12.38.0",
     "next": "^15.5.12",
     "node-fetch": "^2.7.0",
     "openai": "^6.29.0",
