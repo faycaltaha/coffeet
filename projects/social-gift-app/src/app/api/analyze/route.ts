@@ -63,6 +63,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
     },
   });
 
+  const currentYear = new Date().getFullYear();
+
   // Build profile URL list for the model to search
   const profileList = profiles
     .map((p) => `- ${p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}: ${PLATFORM_URLS[p.platform](p.handle)}`)
@@ -84,7 +86,7 @@ When searching profiles, look for:
 
 When searching for trending products:
 - Search TikTok Shop, Instagram Shopping, and Pinterest trends for the person's interest categories
-- Search "trending gifts [category] [year]" and "viral [category] products TikTok [year]"
+- Search "trending gifts [category] ${currentYear}" and "viral [category] products TikTok ${currentYear}"
 - Identify products that are currently viral or widely shared on social media
 - Look for products that appear in gift guides, "things I bought" TikToks, or Pinterest boards
 - For each trending item found, note the platform where it is trending
@@ -136,7 +138,7 @@ ${interestsLine}
 
 Steps to follow:
 1. Browse each profile URL and identify their interests, style, and personality
-2. Search for products currently trending on TikTok, Instagram, and Pinterest that match their interests and the "${occasion}" occasion — use queries like "viral gift [interest] TikTok 2025", "trending [interest] gifts Instagram", "best gift [interest] Pinterest"
+2. Search for products currently trending on TikTok, Instagram, and Pinterest that match their interests and the "${occasion}" occasion — use queries like "viral gift [interest] TikTok ${currentYear}", "trending [interest] gifts Instagram ${currentYear}", "best gift [interest] Pinterest ${currentYear}"
 3. Combine profile insights with trending products to generate personalised recommendations
 ${interests && interests.length > 0 ? "4. Use the known interests as strong hints to guide both profile analysis and trend searches." : ""}
 
