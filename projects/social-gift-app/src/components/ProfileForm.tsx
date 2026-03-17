@@ -11,8 +11,30 @@ const PLATFORMS: { id: SocialProfile["platform"]; label: string; icon: string; p
 ];
 
 const BUDGETS = ["Under €30", "€30–€75", "€75–€150", "€150–€300", "€300+"];
-const OCCASIONS = ["Birthday", "Christmas", "Valentine's Day", "Anniversary", "Just Because", "Graduation", "Wedding", "Other"];
-const RELATIONSHIPS = ["Partner / Spouse", "Best Friend", "Parent", "Sibling", "Child", "Colleague", "Other"];
+
+const OCCASIONS = [
+  { id: "Birthday", label: "Birthday", icon: "🎂" },
+  { id: "Christmas", label: "Christmas", icon: "🎄" },
+  { id: "Valentine's Day", label: "Valentine's", icon: "💝" },
+  { id: "Anniversary", label: "Anniversary", icon: "💑" },
+  { id: "Just Because", label: "Just Because", icon: "🎁" },
+  { id: "Graduation", label: "Graduation", icon: "🎓" },
+  { id: "Wedding", label: "Wedding", icon: "💒" },
+  { id: "Sorry / Make It Up", label: "Make It Up", icon: "🙏" },
+  { id: "Housewarming", label: "Housewarming", icon: "🏠" },
+  { id: "Baby Shower", label: "Baby Shower", icon: "👶" },
+  { id: "Other", label: "Other", icon: "🎉" },
+];
+
+const RELATIONSHIPS = [
+  { id: "Partner / Spouse", label: "Partner", icon: "💞" },
+  { id: "Best Friend", label: "Best Friend", icon: "🤝" },
+  { id: "Parent", label: "Parent", icon: "👪" },
+  { id: "Sibling", label: "Sibling", icon: "👫" },
+  { id: "Child", label: "Child", icon: "🧒" },
+  { id: "Colleague", label: "Colleague", icon: "💼" },
+  { id: "Other", label: "Other", icon: "👤" },
+];
 
 const INTERESTS = [
   { id: "sport", label: "Sport & Fitness", icon: "🏋️" },
@@ -40,9 +62,9 @@ interface Props {
 
 export default function ProfileForm({ onSubmit, loading }: Props) {
   const [recipientName, setRecipientName] = useState("");
-  const [occasion, setOccasion] = useState(OCCASIONS[0]);
+  const [occasion, setOccasion] = useState(OCCASIONS[0].id);
   const [budget, setBudget] = useState(BUDGETS[1]);
-  const [relationship, setRelationship] = useState(RELATIONSHIPS[0]);
+  const [relationship, setRelationship] = useState(RELATIONSHIPS[0].id);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [handles, setHandles] = useState<Record<SocialProfile["platform"], string>>({
     instagram: "",
@@ -136,27 +158,47 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
         </div>
       </div>
 
-      {/* Occasion + Relationship */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Occasion</label>
-          <select
-            value={occasion}
-            onChange={(e) => setOccasion(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition text-gray-800 text-sm"
-          >
-            {OCCASIONS.map((o) => <option key={o}>{o}</option>)}
-          </select>
+      {/* Occasion */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Occasion</label>
+        <div className="flex flex-wrap gap-2">
+          {OCCASIONS.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setOccasion(o.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition border ${
+                occasion === o.id
+                  ? "bg-brand-500 text-white border-brand-500 shadow-md"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-brand-300"
+              }`}
+            >
+              <span>{o.icon}</span>
+              <span>{o.label}</span>
+            </button>
+          ))}
         </div>
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">Relationship</label>
-          <select
-            value={relationship}
-            onChange={(e) => setRelationship(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition text-gray-800 text-sm"
-          >
-            {RELATIONSHIPS.map((r) => <option key={r}>{r}</option>)}
-          </select>
+      </div>
+
+      {/* Relationship */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-2">Relationship</label>
+        <div className="flex flex-wrap gap-2">
+          {RELATIONSHIPS.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setRelationship(r.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition border ${
+                relationship === r.id
+                  ? "bg-brand-500 text-white border-brand-500 shadow-md"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-brand-300"
+              }`}
+            >
+              <span>{r.icon}</span>
+              <span>{r.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
