@@ -1,5 +1,5 @@
 export interface SocialProfile {
-  platform: "instagram" | "tiktok" | "pinterest";
+  platform: "instagram" | "tiktok" | "pinterest" | "youtube";
   handle: string;
 }
 

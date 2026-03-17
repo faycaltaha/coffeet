@@ -7,6 +7,7 @@ const PLATFORMS: { id: SocialProfile["platform"]; label: string; icon: string; p
   { id: "instagram", label: "Instagram", icon: "📸", placeholder: "e.g. natgeo" },
   { id: "tiktok", label: "TikTok", icon: "🎵", placeholder: "e.g. charlidamelio" },
   { id: "pinterest", label: "Pinterest", icon: "📌", placeholder: "e.g. anthropicai" },
+  { id: "youtube", label: "YouTube", icon: "▶️", placeholder: "e.g. mkbhd" },
 ];
 
 const BUDGETS = ["Under €30", "€30–€75", "€75–€150", "€150–€300", "€300+"];
@@ -27,6 +28,7 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
     instagram: "",
     tiktok: "",
     pinterest: "",
+    youtube: "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {

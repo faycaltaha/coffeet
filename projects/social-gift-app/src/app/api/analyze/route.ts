@@ -32,6 +32,7 @@ const PLATFORM_URLS: Record<string, (handle: string) => string> = {
   instagram: (h) => `https://www.instagram.com/${h}/`,
   tiktok: (h) => `https://www.tiktok.com/@${h}`,
   pinterest: (h) => `https://www.pinterest.com/${h}/`,
+  youtube: (h) => `https://www.youtube.com/@${h}`,
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeResponse>> {
