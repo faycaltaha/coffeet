@@ -146,7 +146,7 @@ Return only valid JSON.`;
 
   try {
     const response = await client.chat.completions.create({
-      model: "perplexity/sonar-pro",
+      model: "mistralai/mistral-7b-instruct",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
