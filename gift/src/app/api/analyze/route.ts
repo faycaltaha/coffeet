@@ -37,6 +37,7 @@ const PLATFORM_URLS: Record<string, (handle: string) => string> = {
 
 export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeResponse>> {
   const apiKey = process.env.OPENROUTER_API_KEY;
+  console.log("[analyze] API key present:", !!apiKey, "| prefix:", apiKey?.slice(0, 12));
   if (!apiKey) {
     return NextResponse.json({ success: false, error: "OpenRouter API key not configured." }, { status: 500 });
   }
@@ -173,6 +174,7 @@ Return only valid JSON.`;
 
     return NextResponse.json({ success: true, data: analysisResult });
   } catch (err) {
+    console.error("[analyze] OpenRouter error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
