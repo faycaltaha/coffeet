@@ -25,6 +25,7 @@ export interface AnalyzeRequest {
   occasion: string;
   budget: string;
   relationship: string;
+  interests: string[];
 }
 
 export interface AnalyzeResponse {

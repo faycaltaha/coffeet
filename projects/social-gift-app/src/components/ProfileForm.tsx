@@ -14,6 +14,25 @@ const BUDGETS = ["Under €30", "€30–€75", "€75–€150", "€150–€
 const OCCASIONS = ["Birthday", "Christmas", "Valentine's Day", "Anniversary", "Just Because", "Graduation", "Wedding", "Other"];
 const RELATIONSHIPS = ["Partner / Spouse", "Best Friend", "Parent", "Sibling", "Child", "Colleague", "Other"];
 
+const INTERESTS = [
+  { id: "sport", label: "Sport & Fitness", icon: "🏋️" },
+  { id: "gaming", label: "Gaming", icon: "🎮" },
+  { id: "cooking", label: "Cooking", icon: "🍳" },
+  { id: "travel", label: "Travel", icon: "✈️" },
+  { id: "reading", label: "Reading", icon: "📚" },
+  { id: "music", label: "Music", icon: "🎵" },
+  { id: "art", label: "Art & Creativity", icon: "🎨" },
+  { id: "cinema", label: "Film & Series", icon: "🎬" },
+  { id: "fashion", label: "Fashion & Style", icon: "👗" },
+  { id: "photo", label: "Photo & Video", icon: "📷" },
+  { id: "diy", label: "DIY & Craft", icon: "🔧" },
+  { id: "nature", label: "Nature & Hiking", icon: "🌿" },
+  { id: "wellness", label: "Wellness & Yoga", icon: "🧘" },
+  { id: "tech", label: "Tech & Gadgets", icon: "💻" },
+  { id: "pets", label: "Pets", icon: "🐾" },
+  { id: "food", label: "Gastronomy", icon: "🍽️" },
+];
+
 interface Props {
   onSubmit: (data: AnalyzeRequest) => void;
   loading: boolean;
@@ -24,6 +43,7 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
   const [occasion, setOccasion] = useState(OCCASIONS[0]);
   const [budget, setBudget] = useState(BUDGETS[1]);
   const [relationship, setRelationship] = useState(RELATIONSHIPS[0]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [handles, setHandles] = useState<Record<SocialProfile["platform"], string>>({
     instagram: "",
     tiktok: "",
@@ -38,10 +58,16 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
       .map((p) => ({ platform: p.id, handle: handles[p.id].trim().replace(/^@/, "") }));
 
     if (profiles.length === 0) return;
-    onSubmit({ profiles, recipientName: recipientName.trim() || "your person", occasion, budget, relationship });
+    onSubmit({ profiles, recipientName: recipientName.trim() || "your person", occasion, budget, relationship, interests: selectedInterests });
   };
 
   const hasHandle = Object.values(handles).some((h) => h.trim());
+
+  const toggleInterest = (id: string) => {
+    setSelectedInterests((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -80,6 +106,33 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Interests */}
+      <div>
+        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+          Their interests <span className="text-gray-400 font-normal">(optional — select all that apply)</span>
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {INTERESTS.map((interest) => {
+            const active = selectedInterests.includes(interest.id);
+            return (
+              <button
+                key={interest.id}
+                type="button"
+                onClick={() => toggleInterest(interest.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition border ${
+                  active
+                    ? "bg-brand-500 text-white border-brand-500 shadow-md"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-brand-300"
+                }`}
+              >
+                <span>{interest.icon}</span>
+                <span>{interest.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

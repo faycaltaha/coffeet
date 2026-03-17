@@ -48,7 +48,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
     return NextResponse.json({ success: false, error: "Invalid request body." }, { status: 400 });
   }
 
-  const { profiles, recipientName, occasion, budget, relationship } = body;
+  const { profiles, recipientName, occasion, budget, relationship, interests } = body;
 
   if (!profiles || profiles.length === 0) {
     return NextResponse.json({ success: false, error: "At least one social profile is required." }, { status: 400 });
@@ -110,6 +110,10 @@ Always respond with VALID JSON only (no markdown fences) in this exact structure
 
 Generate 6–8 diverse gift ideas spanning different price points within the budget, ordered from most to least personalised.`;
 
+  const interestsLine = interests && interests.length > 0
+    ? `- Known interests: ${interests.join(", ")}`
+    : "";
+
   const userMessage = `Please search these social media profiles and suggest gifts for ${recipientName}:
 
 ${profileList}
@@ -118,8 +122,9 @@ Gift context:
 - Occasion: ${occasion}
 - Budget: ${budget}
 - Relationship: ${relationship}
+${interestsLine}
 
-Search each profile URL, identify their interests, then generate gift ideas. Return only valid JSON.`;
+${interests && interests.length > 0 ? "Use the known interests as strong hints to guide your recommendations, and confirm or enrich them from the social media profiles." : "Search each profile URL, identify their interests, then generate gift ideas."} Return only valid JSON.`;
 
   try {
     const response = await client.chat.completions.create({
