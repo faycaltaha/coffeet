@@ -157,23 +157,41 @@ Return only valid JSON.`;
     const finalText = response.choices[0]?.message?.content ?? "";
 
     if (!finalText) {
-      return NextResponse.json({ success: false, error: "No response from AI." }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Réponse vide de l'IA." }, { status: 500 });
     }
 
-    // Extract JSON from text (strip any accidental markdown)
+    // Extract JSON from text (strip any accidental markdown fences)
     const jsonMatch = finalText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return NextResponse.json({ success: false, error: "Could not parse AI response." }, { status: 500 });
+      return NextResponse.json({
+        success: false,
+        error: "Impossible de parser la réponse de l'IA.",
+        debug: { rawResponse: finalText.slice(0, 500) },
+      }, { status: 500 });
     }
 
-    const analysisResult: AnalysisResult = JSON.parse(jsonMatch[0]);
+    let analysisResult: AnalysisResult;
+    try {
+      analysisResult = JSON.parse(jsonMatch[0]);
+    } catch (parseErr) {
+      return NextResponse.json({
+        success: false,
+        error: "JSON invalide retourné par l'IA.",
+        debug: { rawResponse: jsonMatch[0].slice(0, 500) },
+      }, { status: 500 });
+    }
 
     // Safety net: strip any haram items the AI may have slipped through
     analysisResult.giftIdeas = filterHalal(analysisResult.giftIdeas);
 
     return NextResponse.json({ success: true, data: analysisResult });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Erreur inconnue";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const status = (err as any)?.status ?? 500;
+    const debug = err instanceof Error
+      ? { name: err.name, stack: err.stack?.slice(0, 600) }
+      : {};
+    return NextResponse.json({ success: false, error: message, debug }, { status });
   }
 }
