@@ -87,11 +87,13 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
     const profiles: SocialProfile[] = PLATFORMS
       .filter((p) => handles[p.id].trim())
       .map((p) => ({ platform: p.id, handle: handles[p.id].trim().replace(/^@/, "") }));
-    if (profiles.length === 0) return;
+    // Allow submission without profiles if interests are selected
+    if (profiles.length === 0 && selectedInterests.length === 0) return;
     onSubmit({ profiles, recipientName: recipientName.trim() || "your person", occasion, budget, relationship, interests: selectedInterests });
   };
 
   const hasHandle = Object.values(handles).some((h) => h.trim());
+  const canSubmit = hasHandle || selectedInterests.length > 0;
 
   const toggleInterest = (id: string) => {
     setSelectedInterests((prev) =>
@@ -118,7 +120,7 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
       {/* Social handles */}
       <motion.div {...sectionAnim(1)}>
         <label className="block text-sm font-semibold text-gray-700 mb-3">
-          Social media profiles <span className="text-gray-400 font-normal">(at least one)</span>
+          Social media profiles <span className="text-gray-400 font-normal">(optional — mais améliore les résultats)</span>
         </label>
         <div className="space-y-2.5">
           {PLATFORMS.map((p, i) => (
@@ -148,7 +150,7 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
       {/* Interests */}
       <motion.div {...sectionAnim(2)}>
         <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-          Their interests <span className="text-gray-400 font-normal">(optional)</span>
+          Their interests <span className="text-gray-400 font-normal">(optional — requis si pas de profil)</span>
         </label>
         <div className="flex flex-wrap gap-2">
           {INTERESTS.map((interest) => {
@@ -249,10 +251,10 @@ export default function ProfileForm({ onSubmit, loading }: Props) {
       <motion.div {...sectionAnim(6)}>
         <motion.button
           type="submit"
-          disabled={!hasHandle || loading}
+          disabled={!canSubmit || loading}
           className="w-full py-3.5 px-6 rounded-2xl font-semibold text-white bg-gradient-to-r from-brand-500 to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-300/40"
-          whileHover={hasHandle && !loading ? { scale: 1.02, boxShadow: "0 12px 32px -4px rgba(192,38,211,0.45)" } : {}}
-          whileTap={hasHandle && !loading ? { scale: 0.97 } : {}}
+          whileHover={canSubmit && !loading ? { scale: 1.02, boxShadow: "0 12px 32px -4px rgba(192,38,211,0.45)" } : {}}
+          whileTap={canSubmit && !loading ? { scale: 0.97 } : {}}
           transition={{ type: "spring", stiffness: 400, damping: 20 }}
         >
           {loading ? "Analyzing…" : "✨ Find Perfect Gifts"}
