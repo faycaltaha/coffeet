@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — CarScan IDF</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body class="dashboard-page">
+
+<nav>
+  <a href="/" class="nav-brand">🚗 CarScan IDF</a>
+  <div class="nav-links">
+    <span id="user-email" class="user-email"></span>
+    <a href="#" id="manage-sub-btn" class="btn-ghost btn-sm hidden">Gérer l'abonnement</a>
+    <button id="logout-btn" class="btn-ghost btn-sm">Déconnexion</button>
+  </div>
+</nav>
+
+<div class="dashboard-container">
+  <div class="dashboard-header">
+    <div>
+      <h1>Meilleures opportunités</h1>
+      <div id="scan-meta" class="scan-meta">Chargement...</div>
+    </div>
+    <div class="dashboard-filters" id="filters" style="display:none">
+      <select id="filter-fuel">
+        <option value="">Tous carburants</option>
+        <option value="essence">Essence</option>
+        <option value="diesel">Diesel</option>
+        <option value="hybride">Hybride</option>
+        <option value="electrique">Électrique</option>
+      </select>
+      <select id="filter-gearbox">
+        <option value="">Toutes boîtes</option>
+        <option value="automatique">Automatique</option>
+        <option value="manuelle">Manuelle</option>
+      </select>
+      <input type="number" id="filter-max-price" placeholder="Prix max (€)" min="0" step="100"/>
+      <input type="number" id="filter-min-profit" placeholder="Profit min (€)" min="0" step="100"/>
+    </div>
+  </div>
+
+  <!-- Paywall banner for free users -->
+  <div id="paywall-banner" class="paywall-banner hidden">
+    <div class="paywall-content">
+      <div class="paywall-icon">🔒</div>
+      <div>
+        <strong>Aperçu gratuit — 3 annonces sur <span id="paywall-total">50</span></strong>
+        <p>Abonnez-vous pour voir le classement complet avec prix, profits estimés et liens directs.</p>
+      </div>
+      <button id="subscribe-btn" class="btn-primary">S'abonner — 5€/mois</button>
+    </div>
+  </div>
+
+  <div id="listings-container">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Chargement des annonces...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem("token");
+if (!token) window.location.href = "/login.html";
+
+let allListings = [];
+let subscribed = false;
+
+// Check for post-payment redirect
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get("subscribed") === "1") {
+  history.replaceState({}, "", "/dashboard.html");
+}
+
+// Logout
+document.getElementById("logout-btn").addEventListener("click", () => {
+  localStorage.removeItem("token");
+  window.location.href = "/";
+});
+
+// Subscribe button
+document.getElementById("subscribe-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("subscribe-btn");
+  btn.disabled = true;
+  btn.textContent = "Redirection...";
+  try {
+    const res = await fetch("/stripe/create-checkout-session", {
+      method: "POST",
+      headers: {"Authorization": `Bearer ${token}`},
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    window.location.href = data.url;
+  } catch (e) {
+    alert("Erreur : " + e.message);
+    btn.disabled = false;
+    btn.textContent = "S'abonner — 5€/mois";
+  }
+});
+
+// Manage subscription
+document.getElementById("manage-sub-btn").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/stripe/create-portal-session", {
+      method: "POST",
+      headers: {"Authorization": `Bearer ${token}`},
+    });
+    const data = await res.json();
+    window.location.href = data.url;
+  } catch (e) {
+    alert("Erreur : " + e.message);
+  }
+});
+
+// Filters
+["filter-fuel", "filter-gearbox", "filter-max-price", "filter-min-profit"].forEach(id => {
+  document.getElementById(id).addEventListener("input", renderListings);
+});
+
+async function init() {
+  try {
+    // Load user info
+    const meRes = await fetch("/api/me", {headers: {"Authorization": `Bearer ${token}`}});
+    if (!meRes.ok) { localStorage.removeItem("token"); window.location.href = "/login.html"; return; }
+    const me = await meRes.json();
+    document.getElementById("user-email").textContent = me.email;
+    subscribed = me.subscription_status === "active";
+    if (subscribed) {
+      document.getElementById("manage-sub-btn").classList.remove("hidden");
+    }
+
+    // Load listings
+    const lRes = await fetch("/api/listings", {headers: {"Authorization": `Bearer ${token}`}});
+    const data = await lRes.json();
+
+    allListings = data.listings || [];
+    subscribed = data.subscribed;
+
+    const scanAt = data.scan_at
+      ? new Date(data.scan_at).toLocaleDateString("fr-FR", {day:"2-digit", month:"long", hour:"2-digit", minute:"2-digit"})
+      : "—";
+    document.getElementById("scan-meta").textContent =
+      `Dernière mise à jour : ${scanAt} · ${data.total} annonces analysées`;
+
+    if (!subscribed) {
+      document.getElementById("paywall-banner").classList.remove("hidden");
+      document.getElementById("paywall-total").textContent = data.total || 50;
+    } else {
+      document.getElementById("filters").style.display = "flex";
+    }
+
+    renderListings();
+  } catch (e) {
+    document.getElementById("listings-container").innerHTML =
+      `<div class="error-state">Erreur de chargement : ${e.message}</div>`;
+  }
+}
+
+function applyFilters(listings) {
+  const fuel = document.getElementById("filter-fuel").value;
+  const gearbox = document.getElementById("filter-gearbox").value;
+  const maxPrice = parseInt(document.getElementById("filter-max-price").value) || Infinity;
+  const minProfit = parseInt(document.getElementById("filter-min-profit").value) || -Infinity;
+  return listings.filter(c => {
+    if (fuel && c.fuel !== fuel) return false;
+    if (gearbox && c.gearbox !== gearbox) return false;
+    if (c.price !== "???" && c.price > maxPrice) return false;
+    if (c.estimated_profit !== "???" && c.estimated_profit < minProfit) return false;
+    return true;
+  });
+}
+
+function fuelIcon(fuel) {
+  const icons = {diesel:"⛽", essence:"⛽", hybride:"⚡", electrique:"⚡", gpl:"🔵"};
+  return icons[fuel] || "⛽";
+}
+
+function renderListings() {
+  const filtered = subscribed ? applyFilters(allListings) : allListings;
+  const container = document.getElementById("listings-container");
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state">Aucune annonce ne correspond aux filtres.</div>`;
+    return;
+  }
+
+  const rows = filtered.map((car, i) => {
+    const priceHtml = subscribed
+      ? `<span class="price-buy">${car.price ? "€"+Number(car.price).toLocaleString("fr-FR") : "—"}</span>`
+      : `<span class="price-locked">🔒 ???</span>`;
+    const profitHtml = subscribed
+      ? (car.estimated_profit > 0 ? `<span class="profit-positive">+€${Number(car.estimated_profit).toLocaleString("fr-FR")}</span>` : "—")
+      : `<span class="price-locked">🔒</span>`;
+    const linkHtml = subscribed && car.url
+      ? `<a href="${car.url}" target="_blank" rel="noopener" class="btn-link">Voir l'annonce →</a>`
+      : `<span class="price-locked">🔒</span>`;
+    const signals = (car.roi_reasons || []).slice(0,3).map(s =>
+      `<span class="signal">${s}</span>`
+    ).join("");
+    const blacklist = car.blacklisted
+      ? `<div class="blacklist-warning">⚠️ ${car.blacklist_reason}</div>`
+      : "";
+    const imgHtml = car.images && car.images[0]
+      ? `<img src="${car.images[0]}" alt="${car.title}" class="car-thumb" loading="lazy"/>`
+      : `<div class="car-thumb-placeholder">🚗</div>`;
+
+    return `
+    <div class="listing-card ${car.blacklisted ? "blacklisted" : ""}">
+      <div class="listing-rank">#${i + 1}</div>
+      ${imgHtml}
+      <div class="listing-main">
+        <div class="listing-title">${car.title}</div>
+        <div class="listing-meta">
+          ${car.year || "?"} · ${car.mileage ? Number(car.mileage).toLocaleString("fr-FR")+" km" : "?"} ·
+          ${fuelIcon(car.fuel)} ${car.fuel || "?"} · ${car.location || "?"}
+        </div>
+        ${blacklist}
+        <div class="listing-signals">${signals}</div>
+      </div>
+      <div class="listing-financials">
+        <div class="financial-row"><span class="label">Achat</span>${priceHtml}</div>
+        <div class="financial-row"><span class="label">Revente est.</span>
+          ${subscribed && car.estimated_resale ? `<span class="price-resale">€${Number(car.estimated_resale).toLocaleString("fr-FR")}</span>` : `<span class="price-locked">🔒</span>`}
+        </div>
+        <div class="financial-row"><span class="label">Profit est.</span>${profitHtml}</div>
+        <div class="score-badge">${car.roi_score}</div>
+        ${linkHtml}
+      </div>
+    </div>`;
+  }).join("");
+
+  container.innerHTML = `<div class="listings-list">${rows}</div>`;
+}
+
+init();
+</script>
+</body>
+</html>
