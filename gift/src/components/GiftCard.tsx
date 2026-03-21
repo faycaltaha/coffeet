@@ -223,7 +223,7 @@ export default function GiftCard({
         {/* Affiliate links */}
         <div className="flex gap-2">
           <motion.a
-            href={amazonUrl(gift.searchQuery, AMAZON_TAG)}
+            href={gift.affiliateLinks?.amazon ?? amazonUrl(gift.searchQuery, AMAZON_TAG)}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={`Trouver "${gift.title}" sur Amazon.fr`}
@@ -235,19 +235,23 @@ export default function GiftCard({
             🛒 Amazon.fr
           </motion.a>
           {(() => {
-            const merchant = secondMerchant(gift.category);
+            const precomputed = gift.affiliateLinks?.secondary;
+            const merchantLabel = precomputed?.label ?? secondMerchant(gift.category).label;
+            const merchantUrl = precomputed?.url ?? secondMerchant(gift.category).url(gift.searchQuery);
+            const merchantIcon = precomputed?.icon ?? secondMerchant(gift.category).icon;
+            const merchantClass = precomputed?.className ?? secondMerchant(gift.category).className;
             return (
               <motion.a
-                href={merchant.url(gift.searchQuery)}
+                href={merchantUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Trouver "${gift.title}" sur ${merchant.label}`}
-                className={`flex-1 text-center py-2 rounded-xl text-sm font-semibold ${merchant.className}`}
+                aria-label={`Trouver "${gift.title}" sur ${merchantLabel}`}
+                className={`flex-1 text-center py-2 rounded-xl text-sm font-semibold ${merchantClass}`}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => trackClick(gift.title, merchant.label)}
+                onClick={() => trackClick(gift.title, merchantLabel)}
               >
-                {merchant.icon} {merchant.label}
+                {merchantIcon} {merchantLabel}
               </motion.a>
             );
           })()}

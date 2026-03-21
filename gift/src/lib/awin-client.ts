@@ -141,6 +141,20 @@ export function buildDeepLink(programmeId: number, destinationUrl: string): stri
   return `https://www.awin1.com/cread.php?awinmid=${programmeId}&awinaffid=${publisherId}&p=${encoded}`;
 }
 
+/**
+ * Build deep link with an explicit publisherId — safe to call without env vars set.
+ * Returns null if publisherId is empty.
+ */
+export function buildDeepLinkSafe(
+  programmeId: number,
+  destinationUrl: string,
+  publisherId: string
+): string | null {
+  if (!publisherId) return null;
+  const encoded = encodeURIComponent(destinationUrl);
+  return `https://www.awin1.com/cread.php?awinmid=${programmeId}&awinaffid=${publisherId}&p=${encoded}`;
+}
+
 // ─── Category → Awin sector mapping ─────────────────────────────────────────
 
 export const CATEGORY_SECTORS: Record<string, string[]> = {
@@ -150,7 +164,8 @@ export const CATEGORY_SECTORS: Record<string, string[]> = {
   fashion: ["fashion", "clothing", "women", "men", "accessories"],
   beauty: ["health & beauty", "cosmetics", "skincare", "perfume"],
   home: ["home", "garden", "kitchen", "furniture", "decoration"],
-  food: ["food & drink", "confectionery", "wine", "spirits", "gourmet"],
+  // Note: wine/spirits intentionally excluded (haram content policy)
+  food: ["food & drink", "confectionery", "gourmet", "épicerie", "halal", "tea", "coffee"],
   books: ["books", "stationery", "music", "film", "education"],
   art: ["arts & crafts", "hobbies", "creative"],
   experience: ["entertainment", "tickets", "events", "experiences", "leisure"],

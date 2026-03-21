@@ -3,6 +3,15 @@ export interface SocialProfile {
   handle: string;
 }
 
+export interface AffiliateMerchant {
+  label: string;
+  url: string;
+  icon: string;
+  className: string;
+  hoverColor: string;
+  commissionPct?: number;
+}
+
 export interface GiftIdea {
   title: string;
   description: string;
@@ -12,6 +21,11 @@ export interface GiftIdea {
   searchQuery: string;
   trending?: boolean;
   trendSource?: string;
+  /** Pre-computed server-side affiliate links (injected by /api/analyze) */
+  affiliateLinks?: {
+    amazon: string;
+    secondary: AffiliateMerchant;
+  };
 }
 
 export interface AnalysisResult {

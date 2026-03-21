@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisResult, GiftIdea } from "@/types";
+import { secondMerchant, amazonUrl } from "@/lib/affiliate";
 
 // Keywords that flag a gift as haram — checked against title + description + searchQuery
 const HARAM_KEYWORDS = [
@@ -227,6 +228,23 @@ Return only valid JSON. Set profileSummary to a short description of the gift re
 
     // Safety net: strip any haram items the AI may have slipped through
     analysisResult.giftIdeas = filterHalal(analysisResult.giftIdeas);
+
+    // Inject server-side affiliate links (Awin deeplinks + Amazon tag)
+    const amazonTag = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
+    for (const gift of analysisResult.giftIdeas) {
+      const merchant = secondMerchant(gift.category);
+      gift.affiliateLinks = {
+        amazon: amazonUrl(gift.searchQuery, amazonTag),
+        secondary: {
+          label: merchant.label,
+          url: merchant.url(gift.searchQuery),
+          icon: merchant.icon,
+          className: merchant.className,
+          hoverColor: merchant.hoverColor,
+          commissionPct: merchant.commissionPct,
+        },
+      };
+    }
 
     return NextResponse.json({ success: true, data: analysisResult });
   } catch (err) {

@@ -10,7 +10,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { buildDeepLink, EnrichedProgramme } from "./awin-client";
+import { buildDeepLinkSafe, EnrichedProgramme } from "./awin-client";
 
 // ─── Cache Awin ──────────────────────────────────────────────────────────────
 
@@ -135,16 +135,16 @@ export function secondMerchant(category: string): SecondMerchant {
   // 1. Meilleur partenaire Awin
   const awin = bestAwinPartner(cat);
   if (awin) {
+    const publisherId = process.env.AWIN_PUBLISHER_ID ?? "";
     const style = styleFor(awin.name);
     return {
       label: awin.name,
       ...style,
       commissionPct: awin.commissionPct,
-      url: (query: string) =>
-        buildDeepLink(
-          awin.id,
-          `https://www.${awin.displayUrl}/search?q=${encodeURIComponent(query)}`
-        ),
+      url: (query: string) => {
+        const dest = `https://www.${awin.displayUrl}/search?q=${encodeURIComponent(query)}`;
+        return buildDeepLinkSafe(awin.id, dest, publisherId) ?? dest;
+      },
     };
   }
 
@@ -182,14 +182,14 @@ export function allMerchantsForCategory(category: string): SecondMerchant[] {
 
   if (partners.length === 0) return [secondMerchant(category)];
 
+  const publisherId = process.env.AWIN_PUBLISHER_ID ?? "";
   return partners.map((p) => ({
     label: p.name,
     ...styleFor(p.name),
     commissionPct: p.commissionPct,
-    url: (query: string) =>
-      buildDeepLink(
-        p.id,
-        `https://www.${p.displayUrl}/search?q=${encodeURIComponent(query)}`
-      ),
+    url: (query: string) => {
+      const dest = `https://www.${p.displayUrl}/search?q=${encodeURIComponent(query)}`;
+      return buildDeepLinkSafe(p.id, dest, publisherId) ?? dest;
+    },
   }));
 }
