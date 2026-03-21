@@ -50,8 +50,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
 
   const { profiles, recipientName, occasion, budget, relationship, interests } = body;
 
-  if (!profiles || profiles.length === 0) {
-    return NextResponse.json({ success: false, error: "At least one social profile is required." }, { status: 400 });
+  if (!profiles) {
+    return NextResponse.json({ success: false, error: "Invalid profiles field." }, { status: 400 });
   }
 
   const client = new OpenAI({
@@ -65,13 +65,15 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
 
   const currentYear = new Date().getFullYear();
 
+  const hasProfiles = profiles.length > 0;
+
   // Build profile URL list for the model to search
   const profileList = profiles
     .map((p) => `- ${p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}: ${PLATFORM_URLS[p.platform](p.handle)}`)
     .join("\n");
 
   const systemPrompt = `You are GiftSense, an expert halal-friendly gift advisor. Your job is to:
-1. Search and browse each social media profile URL provided
+${hasProfiles ? `1. Search and browse each social media profile URL provided
 2. Analyse the public content (posts, bio, highlights, saved content) to understand the person's interests, hobbies, aesthetic preferences, and lifestyle
 3. Search for currently trending gift products on TikTok, Instagram, and Pinterest that match the person's interests and the occasion
 4. Generate highly personalised gift recommendations, mixing profile-matched picks with trending viral products they may have already seen on their feed
@@ -82,7 +84,9 @@ When searching profiles, look for:
 - Products/brands they mention or tag
 - Activities and hobbies
 - Aesthetic style (minimalist, bohemian, sporty, etc.)
-- Food, travel, or cultural preferences
+- Food, travel, or cultural preferences` : `1. Use the provided interests, occasion, relationship and budget to understand what gifts would be most fitting
+2. Search for currently trending gift products on TikTok, Instagram, and Pinterest that match the interests and the occasion
+3. Generate creative and personalised gift recommendations based on the known interests and context`}
 
 When searching for trending products:
 - Search TikTok Shop, Instagram Shopping, and Pinterest trends for the person's interest categories
@@ -126,7 +130,8 @@ Generate 6–8 diverse gift ideas spanning different price points within the bud
     ? `- Known interests: ${interests.join(", ")}`
     : "";
 
-  const userMessage = `Please search these social media profiles and suggest gifts for ${recipientName}:
+  const userMessage = hasProfiles
+    ? `Please search these social media profiles and suggest gifts for ${recipientName}:
 
 ${profileList}
 
@@ -142,7 +147,21 @@ Steps to follow:
 3. Combine profile insights with trending products to generate personalised recommendations
 ${interests && interests.length > 0 ? "4. Use the known interests as strong hints to guide both profile analysis and trend searches." : ""}
 
-Return only valid JSON.`;
+Return only valid JSON.`
+    : `Please suggest gifts for ${recipientName} based on the following context:
+
+Gift context:
+- Occasion: ${occasion}
+- Budget: ${budget}
+- Relationship: ${relationship}
+${interestsLine}
+
+Steps to follow:
+1. Search for products currently trending on TikTok, Instagram, and Pinterest that match the interests and the "${occasion}" occasion — use queries like "viral gift [interest] TikTok ${currentYear}", "trending [interest] gifts Instagram ${currentYear}", "best gift [interest] Pinterest ${currentYear}"
+2. Generate personalised and creative recommendations based on the interests and occasion
+${interests && interests.length > 0 ? "3. Prioritise ideas that directly reflect the known interests." : "3. Suggest diverse ideas that would suit someone for this occasion."}
+
+Return only valid JSON. Set profileSummary to a short description of the gift recipient based on the provided interests and context (not based on any profile).`;
 
   try {
     const response = await client.chat.completions.create({

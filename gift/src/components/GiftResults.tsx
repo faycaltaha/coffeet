@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AnalysisResult, GiftIdea } from "@/types";
-import { amazonUrl, fnacUrl } from "@/lib/affiliate";
+import { amazonUrl, secondMerchant } from "@/lib/affiliate";
 
 const AMAZON_TAG = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
 
@@ -35,6 +35,8 @@ const BUDGET_FILTERS = [
   { label: "< €100", max: 100 },
   { label: "< €200", max: 200 },
 ];
+
+const ALL_CATEGORIES = "all";
 
 const containerVariants = {
   hidden: {},
@@ -136,16 +138,21 @@ function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
         >
           🛒 Amazon.fr
         </motion.a>
-        <motion.a
-          href={fnacUrl(gift.searchQuery)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1 text-center py-2 rounded-xl text-sm font-semibold bg-yellow-50 text-yellow-800 border border-yellow-200"
-          whileHover={{ scale: 1.03, backgroundColor: "#fef9c3" }}
-          whileTap={{ scale: 0.97 }}
-        >
-          🟡 Fnac
-        </motion.a>
+        {(() => {
+          const merchant = secondMerchant(gift.category);
+          return (
+            <motion.a
+              href={merchant.url(gift.searchQuery)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`flex-1 text-center py-2 rounded-xl text-sm font-semibold ${merchant.className}`}
+              whileHover={{ scale: 1.03, backgroundColor: merchant.hoverColor }}
+              whileTap={{ scale: 0.97 }}
+            >
+              {merchant.icon} {merchant.label}
+            </motion.a>
+          );
+        })()}
       </div>
     </motion.div>
   );
@@ -160,13 +167,31 @@ interface Props {
 export default function GiftResults({ result, recipientName, onReset }: Props) {
   const [maxBudget, setMaxBudget] = useState(Infinity);
   const [trendingOnly, setTrendingOnly] = useState(false);
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
+  const [copied, setCopied] = useState(false);
 
   const hasTrending = result.giftIdeas.some((g) => g.trending);
+  const categories = Array.from(new Set(result.giftIdeas.map((g) => g.category.toLowerCase())));
 
   const filtered = result.giftIdeas.filter((g) => {
     if (trendingOnly && !g.trending) return false;
+    if (activeCategory !== ALL_CATEGORIES && g.category.toLowerCase() !== activeCategory) return false;
     return parseLowerPrice(g.priceRange) < maxBudget;
   });
+
+  const copyList = () => {
+    const text = [
+      `🎁 Gift ideas for ${recipientName}`,
+      "",
+      ...result.giftIdeas.map(
+        (g, i) => `${i + 1}. ${g.title} — ${g.priceRange}\n   ${g.reason}`
+      ),
+    ].join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -242,6 +267,45 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
         <span className="ml-auto text-xs text-gray-400">{filtered.length} ideas</span>
       </motion.div>
 
+      {/* Category filters */}
+      {categories.length > 1 && (
+        <motion.div
+          className="flex items-center gap-2 flex-wrap"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.35 }}
+        >
+          <span className="text-xs font-semibold text-gray-500 mr-1">Catégorie:</span>
+          <motion.button
+            onClick={() => setActiveCategory(ALL_CATEGORIES)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+              activeCategory === ALL_CATEGORIES
+                ? "bg-brand-500 text-white border-brand-500 shadow"
+                : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300"
+            }`}
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.93 }}
+          >
+            Tout
+          </motion.button>
+          {categories.map((cat) => (
+            <motion.button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border capitalize transition-colors ${
+                activeCategory === cat
+                  ? "bg-brand-500 text-white border-brand-500 shadow"
+                  : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300"
+              }`}
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.93 }}
+            >
+              {cat}
+            </motion.button>
+          ))}
+        </motion.div>
+      )}
+
       {/* Gift grid */}
       <div>
         <motion.h2
@@ -279,6 +343,17 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Share / copy list */}
+      <motion.button
+        onClick={copyList}
+        className="w-full py-3 rounded-2xl border-2 border-gray-200 text-gray-600 font-semibold bg-white/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm"
+        whileHover={{ scale: 1.01, backgroundColor: "rgba(249,250,251,0.9)" }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 400, damping: 20 }}
+      >
+        {copied ? "✅ Liste copiée !" : "📋 Copier la liste pour partager"}
+      </motion.button>
 
       {/* Affiliate disclaimer */}
       <p className="text-xs text-gray-400 text-center">
