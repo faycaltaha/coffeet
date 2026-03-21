@@ -6,6 +6,8 @@ import ProfileForm, { type RecentSearch } from "@/components/ProfileForm";
 import GiftResults from "@/components/GiftResults";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import Toast, { type ToastType } from "@/components/Toast";
+import GiftCart from "@/components/GiftCart";
+import { useCart } from "@/lib/use-cart";
 import type { AnalyzeRequest, AnalysisResult } from "@/types";
 import { DEMO_RESULT } from "@/lib/demo-data";
 
@@ -125,6 +127,9 @@ export default function HomePage() {
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [darkMode, setDarkMode] = useState(false);
   const [prefill, setPrefill] = useState<AnalyzeRequest | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+
+  const { items: cartItems, addItem: addToCart, removeItem: removeFromCart, clearCart, isInCart } = useCart();
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: ToastType; visible: boolean }>({
@@ -432,6 +437,10 @@ export default function HomePage() {
                     window.history.replaceState(null, "", window.location.pathname);
                   }}
                   showToast={showToast}
+                  cartItems={cartItems}
+                  onAddToCart={addToCart}
+                  onRemoveFromCart={removeFromCart}
+                  isInCart={isInCart}
                 />
               </motion.div>
             )}
@@ -449,6 +458,48 @@ export default function HomePage() {
           Aucun mot de passe ni accès privé requis.
         </motion.footer>
       </main>
+
+      {/* Floating cart button */}
+      <AnimatePresence>
+        {(cartItems.length > 0 || true) && (
+          <motion.button
+            onClick={() => setCartOpen(true)}
+            aria-label={`Ouvrir le panier (${cartItems.length} article${cartItems.length > 1 ? "s" : ""})`}
+            className="fixed bottom-6 right-6 z-[80] w-14 h-14 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 text-white shadow-xl shadow-brand-400/40 flex items-center justify-center text-2xl"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            whileHover={{ scale: 1.12, boxShadow: "0 12px 32px -4px rgba(192,38,211,0.55)" }}
+            whileTap={{ scale: 0.92 }}
+            transition={{ type: "spring", stiffness: 380, damping: 28 }}
+          >
+            🛒
+            {cartItems.length > 0 && (
+              <motion.span
+                key={cartItems.length}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-gray-900"
+              >
+                {cartItems.length > 9 ? "9+" : cartItems.length}
+              </motion.span>
+            )}
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Cart drawer */}
+      <AnimatePresence>
+        {cartOpen && (
+          <GiftCart
+            items={cartItems}
+            onRemove={removeFromCart}
+            onClear={clearCart}
+            onClose={() => setCartOpen(false)}
+            showToast={showToast}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Global toast */}
       <Toast message={toast.message} type={toast.type} visible={toast.visible} onDismiss={dismissToast} />

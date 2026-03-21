@@ -154,7 +154,7 @@ Always respond with VALID JSON only (no markdown fences) in this exact structure
   ]
 }
 
-Generate 6–8 diverse gift ideas spanning different price points within the budget. Include at least 2–3 currently trending items if relevant. Order: trending items first, then most-personalised, then general.`;
+Generate 10–12 diverse gift ideas spanning different price points within the budget. Include at least 3–4 currently trending items if relevant. Order: trending items first, then most-personalised, then general.`;
 
   const interestsLine = interests && interests.length > 0
     ? `- Centres d'intérêt connus : ${interests.join(", ")}`
