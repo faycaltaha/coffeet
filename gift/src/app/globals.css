@@ -56,12 +56,10 @@
 
 /* ---- Print styles for PDF export ---- */
 @media print {
-  /* Hide everything except the gift list */
+  .no-print,
   header,
   footer,
-  nav,
-  button,
-  .no-print {
+  nav {
     display: none !important;
   }
 
@@ -73,10 +71,5 @@
 
   main {
     padding: 0 !important;
-  }
-
-  /* Show only the profile summary + gift cards */
-  .space-y-6 > *:not(:nth-child(1)):not(:nth-child(6)) {
-    display: none;
   }
 }
