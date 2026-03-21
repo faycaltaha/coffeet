@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import type { GiftIdea } from "@/types";
 import { amazonUrl, secondMerchant } from "@/lib/affiliate-client";
+import { trackClick } from "@/lib/tracking";
 
 const AMAZON_TAG = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
 
@@ -48,14 +49,6 @@ function categoryColor(cat: string) {
   return CATEGORY_COLORS[cat.toLowerCase()] ?? CATEGORY_COLORS.default;
 }
 
-function trackClick(title: string, merchant: string) {
-  try {
-    const raw = localStorage.getItem("gift_clicks") || "[]";
-    const clicks: { title: string; merchant: string; ts: number }[] = JSON.parse(raw);
-    clicks.push({ title, merchant, ts: Date.now() });
-    localStorage.setItem("gift_clicks", JSON.stringify(clicks.slice(-200)));
-  } catch {}
-}
 
 export interface GiftCardProps {
   gift: GiftIdea;
@@ -235,23 +228,24 @@ export default function GiftCard({
             🛒 Amazon.fr
           </motion.a>
           {(() => {
-            const precomputed = gift.affiliateLinks?.secondary;
-            const merchantLabel = precomputed?.label ?? secondMerchant(gift.category).label;
-            const merchantUrl = precomputed?.url ?? secondMerchant(gift.category).url(gift.searchQuery);
-            const merchantIcon = precomputed?.icon ?? secondMerchant(gift.category).icon;
-            const merchantClass = precomputed?.className ?? secondMerchant(gift.category).className;
+            const pre = gift.affiliateLinks?.secondary;
+            const fb = pre ? null : secondMerchant(gift.category);
+            const label = pre?.label ?? fb!.label;
+            const url = pre?.url ?? fb!.url(gift.searchQuery);
+            const icon = pre?.icon ?? fb!.icon;
+            const cls = pre?.className ?? fb!.className;
             return (
               <motion.a
-                href={merchantUrl}
+                href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Trouver "${gift.title}" sur ${merchantLabel}`}
-                className={`flex-1 text-center py-2 rounded-xl text-sm font-semibold ${merchantClass}`}
+                aria-label={`Trouver "${gift.title}" sur ${label}`}
+                className={`flex-1 text-center py-2 rounded-xl text-sm font-semibold ${cls}`}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => trackClick(gift.title, merchantLabel)}
+                onClick={() => trackClick(gift.title, label)}
               >
-                {merchantIcon} {merchantLabel}
+                {icon} {label}
               </motion.a>
             );
           })()}

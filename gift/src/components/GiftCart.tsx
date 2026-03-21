@@ -2,18 +2,10 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { amazonUrl, secondMerchant } from "@/lib/affiliate-client";
+import { trackClick } from "@/lib/tracking";
 import type { CartItem } from "@/lib/use-cart";
 
 const AMAZON_TAG = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
-
-function trackClick(title: string, merchant: string) {
-  try {
-    const raw = localStorage.getItem("gift_clicks") || "[]";
-    const clicks: { title: string; merchant: string; ts: number }[] = JSON.parse(raw);
-    clicks.push({ title, merchant, ts: Date.now() });
-    localStorage.setItem("gift_clicks", JSON.stringify(clicks.slice(-200)));
-  } catch {}
-}
 
 interface Props {
   items: CartItem[];

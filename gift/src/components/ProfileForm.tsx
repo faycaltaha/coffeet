@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, type Transition, type TargetAndTransition } from "framer-motion";
 import type { SocialProfile, AnalyzeRequest } from "@/types";
+import type { RecentSearch } from "@/lib/storage";
 
 const PLATFORMS: { id: SocialProfile["platform"]; label: string; icon: string; placeholder: string }[] = [
   { id: "instagram", label: "Instagram", icon: "📸", placeholder: "ex. natgeo" },
@@ -67,12 +68,6 @@ function sectionAnim(i: number): { initial: TargetAndTransition; animate: Target
     animate: { opacity: 1, y: 0 },
     transition: { delay: i * 0.07, duration: 0.4 },
   };
-}
-
-export interface RecentSearch {
-  label: string;
-  data: AnalyzeRequest;
-  ts: number;
 }
 
 interface Props {
