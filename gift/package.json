@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "awin:scan": "tsx scripts/awin-bot.ts",
+    "awin:json": "tsx scripts/awin-bot.ts --format json"
   },
   "private": true,
   "dependencies": {
@@ -25,6 +27,7 @@
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "https-proxy-agent": "^8.0.0"
+    "https-proxy-agent": "^8.0.0",
+    "tsx": "^4.21.0"
   }
 }
