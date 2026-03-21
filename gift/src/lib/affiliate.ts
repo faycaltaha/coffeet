@@ -49,7 +49,7 @@ export function secondMerchant(category: string): SecondMerchant {
       url: decathlonUrl,
     };
   }
-  if (cat === "books" || cat === "tech") {
+  if (cat === "tech") {
     return {
       label: "Fnac",
       icon: "🟡",
@@ -58,22 +58,22 @@ export function secondMerchant(category: string): SecondMerchant {
       url: fnacUrl,
     };
   }
-  if (cat === "art" || cat === "home" || cat === "fashion" || cat === "beauty" || cat === "experience") {
-    return {
-      label: "Etsy",
-      icon: "🛍️",
-      className: "bg-orange-50 text-orange-800 border border-orange-200",
-      hoverColor: "#fff7ed",
-      url: etsyUrl,
-    };
-  }
-  if (cat === "food") {
+  if (cat === "books" || cat === "art") {
     return {
       label: "Cultura",
       icon: "🎨",
       className: "bg-green-50 text-green-800 border border-green-200",
       hoverColor: "#f0fdf4",
       url: culturaUrl,
+    };
+  }
+  if (cat === "home" || cat === "fashion" || cat === "beauty" || cat === "experience" || cat === "food") {
+    return {
+      label: "Etsy",
+      icon: "🛍️",
+      className: "bg-orange-50 text-orange-800 border border-orange-200",
+      hoverColor: "#fff7ed",
+      url: etsyUrl,
     };
   }
   // Default fallback
