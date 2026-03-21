@@ -19,13 +19,15 @@ export interface AwinProgramme {
   logoUrl?: string;
   currencyCode: string;
   status: string;
-  /** Sector taxonomy provided by Awin */
   primarySector?: string;
-  /** Commission groups summary */
-  commissionRange?: {
-    min: number;
-    max: number;
-  };
+  commissionRange?: { min: number; max: number };
+}
+
+export interface AwinCommissionGroup {
+  groupId: number;
+  groupName: string;
+  type: "percentage" | "fixed";
+  value: number;
 }
 
 export interface AwinTransaction {
@@ -35,6 +37,16 @@ export interface AwinTransaction {
   saleAmount: { amount: number; currency: string };
   transactionDate: string;
   status: string;
+}
+
+/** Enriched programme with resolved commission rate (%) */
+export interface EnrichedProgramme extends AwinProgramme {
+  /** Best commission rate in % (max across commission groups) */
+  commissionPct: number;
+  /** Awin deep link to merchant homepage */
+  deepLink: string;
+  /** Categories this programme matches */
+  categories: string[];
 }
 
 function getCredentials() {
@@ -48,23 +60,25 @@ function getCredentials() {
   return { apiKey, publisherId };
 }
 
-async function awinFetch<T>(path: string): Promise<T> {
+async function awinFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const { apiKey } = getCredentials();
   const url = `${BASE_URL}${path}`;
   const res = await fetch(url, {
+    ...opts,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      ...(opts?.headers ?? {}),
     },
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Awin API ${res.status}: ${body}`);
+    throw new Error(`Awin API ${res.status} ${path}: ${body}`);
   }
   return res.json() as Promise<T>;
 }
 
-/** Fetch programmes by relationship. Default: joined. */
+/** Fetch programmes by relationship */
 export async function fetchProgrammes(
   relationship: AwinRelationship = "joined",
   countryCode = "FR"
@@ -75,7 +89,34 @@ export async function fetchProgrammes(
   );
 }
 
-/** Fetch recent transactions (earnings) */
+/** Fetch commission groups for a specific programme */
+export async function fetchCommissions(
+  programmeId: number
+): Promise<AwinCommissionGroup[]> {
+  const { publisherId } = getCredentials();
+  try {
+    return await awinFetch<AwinCommissionGroup[]>(
+      `/publishers/${publisherId}/commissiongroups?advertiserId=${programmeId}`
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Apply to join a programme on Awin.
+ * Returns the new relationship status.
+ * Note: some programmes are auto-approved, others go to "pending".
+ */
+export async function joinProgramme(programmeId: number): Promise<{ status: string }> {
+  const { publisherId } = getCredentials();
+  return awinFetch<{ status: string }>(
+    `/publishers/${publisherId}/programmes/${programmeId}/join`,
+    { method: "POST" }
+  );
+}
+
+/** Fetch recent transactions */
 export async function fetchTransactions(opts?: {
   startDate?: string;
   endDate?: string;
@@ -93,14 +134,8 @@ export async function fetchTransactions(opts?: {
   );
 }
 
-/**
- * Build an Awin deep link for a merchant URL.
- * Requires the merchant's Awin programme ID.
- */
-export function buildDeepLink(
-  programmeId: number,
-  destinationUrl: string
-): string {
+/** Build an Awin tracked deep link */
+export function buildDeepLink(programmeId: number, destinationUrl: string): string {
   const { publisherId } = getCredentials();
   const encoded = encodeURIComponent(destinationUrl);
   return `https://www.awin1.com/cread.php?awinmid=${programmeId}&awinaffid=${publisherId}&p=${encoded}`;
@@ -108,29 +143,31 @@ export function buildDeepLink(
 
 // ─── Category → Awin sector mapping ─────────────────────────────────────────
 
-/** Gift categories → Awin primary sectors keywords */
 export const CATEGORY_SECTORS: Record<string, string[]> = {
-  tech: ["Electrical & Accessories", "Computing", "Mobile Phones & Accessories"],
-  sport: ["Sports", "Outdoor & Garden"],
-  travel: ["Travel", "Hotels & Accommodation", "Travel Accessories"],
-  fashion: ["Fashion", "Women", "Men", "Clothing"],
-  beauty: ["Health & Beauty", "Cosmetics"],
-  home: ["Home & Garden", "Kitchen & Dining", "Furniture"],
-  food: ["Food & Drink", "Confectionery", "Wine & Spirits"],
-  books: ["Books", "Stationery", "Music & Film"],
-  art: ["Arts & Crafts", "Hobbies"],
-  experience: ["Entertainment", "Tickets & Events", "Experiences"],
+  tech: ["electrical", "computing", "mobile phones", "electronics", "gaming"],
+  sport: ["sports", "outdoor", "fitness", "cycling"],
+  travel: ["travel", "hotels", "accommodation", "luggage"],
+  fashion: ["fashion", "clothing", "women", "men", "accessories"],
+  beauty: ["health & beauty", "cosmetics", "skincare", "perfume"],
+  home: ["home", "garden", "kitchen", "furniture", "decoration"],
+  food: ["food & drink", "confectionery", "wine", "spirits", "gourmet"],
+  books: ["books", "stationery", "music", "film", "education"],
+  art: ["arts & crafts", "hobbies", "creative"],
+  experience: ["entertainment", "tickets", "events", "experiences", "leisure"],
 };
 
-/** Return true if a programme matches a gift category */
-export function matchesCategory(
-  programme: AwinProgramme,
-  category: string
-): boolean {
+export function matchesCategory(programme: AwinProgramme, category: string): boolean {
   const keywords = CATEGORY_SECTORS[category.toLowerCase()] ?? [];
   const sector = (programme.primarySector ?? "").toLowerCase();
   const name = programme.name.toLowerCase();
   return keywords.some(
     (k) => sector.includes(k.toLowerCase()) || name.includes(k.toLowerCase())
   );
+}
+
+/** Extract best commission % from commission groups */
+export function bestCommissionPct(groups: AwinCommissionGroup[]): number {
+  const pctGroups = groups.filter((g) => g.type === "percentage");
+  if (pctGroups.length === 0) return 0;
+  return Math.max(...pctGroups.map((g) => g.value));
 }
