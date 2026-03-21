@@ -2,7 +2,12 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function LoadingSpinner({ message }: { message?: string }) {
+interface Props {
+  message?: string;
+  progress?: number; // 0–100
+}
+
+export default function LoadingSpinner({ message, progress }: Props) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-7">
       {/* Orbital ring system */}
@@ -59,15 +64,30 @@ export default function LoadingSpinner({ message }: { message?: string }) {
       <AnimatePresence mode="wait">
         <motion.p
           key={message}
-          className="text-brand-700 font-semibold text-sm text-center px-4"
+          className="text-brand-700 font-semibold text-sm text-center px-4 dark:text-brand-300"
           initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
           transition={{ duration: 0.35, ease: "easeInOut" }}
         >
-          {message ?? "Analyzing profiles…"}
+          {message ?? "Analyse des profils…"}
         </motion.p>
       </AnimatePresence>
+
+      {/* Progress bar */}
+      {progress !== undefined && (
+        <div className="w-full max-w-[240px]">
+          <div className="h-1.5 rounded-full bg-brand-100/60 dark:bg-gray-700 overflow-hidden">
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-brand-400 via-purple-500 to-pink-400"
+              initial={{ width: "0%" }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            />
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-1.5">{Math.round(progress)}%</p>
+        </div>
+      )}
 
       {/* Bouncing dots */}
       <div className="flex gap-2">

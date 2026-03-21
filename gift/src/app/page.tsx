@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import ProfileForm from "@/components/ProfileForm";
+import ProfileForm, { type RecentSearch } from "@/components/ProfileForm";
 import GiftResults from "@/components/GiftResults";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import type { AnalyzeRequest, AnalysisResult } from "@/types";
@@ -15,33 +15,190 @@ type State =
   | { status: "error"; message: string };
 
 const LOADING_MESSAGES = [
-  "Browsing social profiles…",
-  "Discovering hidden interests…",
-  "Curating personalised ideas…",
-  "Wrapping up the perfect gifts…",
+  "Analyse des profils…",
+  "Découverte des centres d'intérêt…",
+  "Sélection des meilleures idées…",
+  "Préparation des cadeaux parfaits…",
 ];
 
 const PLATFORMS = [
   { icon: "📸", label: "Instagram" },
   { icon: "🎵", label: "TikTok" },
   { icon: "📌", label: "Pinterest" },
+  { icon: "▶️", label: "YouTube" },
 ];
+
+// --- Cache helpers (localStorage) ---
+function cacheKey(data: AnalyzeRequest): string {
+  try {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(data)))).slice(0, 80);
+  } catch {
+    return "";
+  }
+}
+
+function loadFromCache(data: AnalyzeRequest): AnalysisResult | null {
+  try {
+    const key = cacheKey(data);
+    if (!key) return null;
+    const raw = localStorage.getItem(`gift_cache_${key}`);
+    if (!raw) return null;
+    const { result, ts } = JSON.parse(raw);
+    // 24h TTL
+    if (Date.now() - ts > 86_400_000) return null;
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function saveToCache(data: AnalyzeRequest, result: AnalysisResult) {
+  try {
+    const key = cacheKey(data);
+    if (!key) return;
+    localStorage.setItem(`gift_cache_${key}`, JSON.stringify({ result, ts: Date.now() }));
+  } catch {}
+}
+
+// --- Recent searches helpers ---
+function loadRecentSearches(): RecentSearch[] {
+  try {
+    return JSON.parse(localStorage.getItem("gift_recent") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentSearch(data: AnalyzeRequest) {
+  try {
+    const recent = loadRecentSearches().filter(
+      (r) => r.data.recipientName !== data.recipientName
+    );
+    const label = `${data.recipientName} · ${data.occasion} · ${data.budget}`;
+    recent.unshift({ label, data, ts: Date.now() });
+    localStorage.setItem("gift_recent", JSON.stringify(recent.slice(0, 3)));
+  } catch {}
+}
+
+// --- URL params helpers ---
+function encodeFormToUrl(data: AnalyzeRequest): string {
+  const params = new URLSearchParams();
+  params.set("name", data.recipientName);
+  params.set("occasion", data.occasion);
+  params.set("budget", data.budget);
+  params.set("relationship", data.relationship);
+  if (data.interests?.length) params.set("interests", data.interests.join(","));
+  for (const p of data.profiles) params.set(p.platform, p.handle);
+  return params.toString();
+}
+
+function decodeUrlToForm(): AnalyzeRequest | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get("name");
+    if (!name) return null;
+    const profiles = (["instagram", "tiktok", "pinterest", "youtube"] as const)
+      .filter((p) => params.get(p))
+      .map((p) => ({ platform: p, handle: params.get(p)! }));
+    return {
+      recipientName: name,
+      occasion: params.get("occasion") ?? "Birthday",
+      budget: params.get("budget") ?? "€30–€75",
+      relationship: params.get("relationship") ?? "Best Friend",
+      interests: params.get("interests")?.split(",").filter(Boolean) ?? [],
+      profiles,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// --- Confetti ---
+async function triggerConfetti() {
+  try {
+    const { default: confetti } = await import("canvas-confetti");
+    confetti({
+      particleCount: 130,
+      spread: 80,
+      origin: { y: 0.55 },
+      colors: ["#d946ef", "#a855f7", "#ec4899", "#f59e0b", "#10b981"],
+    });
+  } catch {}
+}
 
 export default function HomePage() {
   const [state, setState] = useState<State>({ status: "idle" });
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
+  const [progress, setProgress] = useState(0);
+  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
+  const [darkMode, setDarkMode] = useState(false);
+  const [prefill, setPrefill] = useState<AnalyzeRequest | null>(null);
+
+  // Load dark mode preference + recent searches + URL prefill on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("gift_dark");
+    if (saved === "1") {
+      setDarkMode(true);
+      document.documentElement.classList.add("dark");
+    }
+    setRecentSearches(loadRecentSearches());
+
+    const urlData = decodeUrlToForm();
+    if (urlData) setPrefill(urlData);
+  }, []);
+
+  const toggleDark = () => {
+    setDarkMode((prev) => {
+      const next = !prev;
+      document.documentElement.classList.toggle("dark", next);
+      localStorage.setItem("gift_dark", next ? "1" : "0");
+      return next;
+    });
+  };
 
   const runDemo = () => {
     setState({ status: "loading" });
+    setProgress(0);
+    const timer = setInterval(() => setProgress((p) => Math.min(p + 8, 92)), 200);
     setTimeout(() => {
-      setState({ status: "result", data: DEMO_RESULT, recipientName: "Alex" });
+      clearInterval(timer);
+      setProgress(100);
+      setTimeout(() => {
+        setState({ status: "result", data: DEMO_RESULT, recipientName: "Alex" });
+        triggerConfetti();
+      }, 300);
     }, 2200);
   };
 
-  const handleSubmit = async (data: AnalyzeRequest) => {
+  const handleSubmit = useCallback(async (data: AnalyzeRequest) => {
+    // Update URL params for sharing
+    const qs = encodeFormToUrl(data);
+    window.history.replaceState(null, "", `?${qs}`);
+
+    // Check cache first
+    const cached = loadFromCache(data);
+    if (cached) {
+      setState({ status: "result", data: cached, recipientName: data.recipientName });
+      triggerConfetti();
+      return;
+    }
+
     setState({ status: "loading" });
+    setProgress(0);
+
+    // Fake progress ticker
+    const ticker = setInterval(() => {
+      setProgress((p) => {
+        if (p < 30) return p + 5;
+        if (p < 70) return p + 1.5;
+        if (p < 90) return p + 0.5;
+        return p;
+      });
+    }, 500);
+
     let msgIdx = 0;
-    const interval = setInterval(() => {
+    const msgInterval = setInterval(() => {
       msgIdx = (msgIdx + 1) % LOADING_MESSAGES.length;
       setLoadingMsg(LOADING_MESSAGES[msgIdx]);
     }, 3000);
@@ -53,20 +210,42 @@ export default function HomePage() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
+
+      clearInterval(ticker);
+      setProgress(100);
+
       if (!json.success || !json.data) {
-        setState({ status: "error", message: json.error ?? "Something went wrong." });
+        setState({ status: "error", message: json.error ?? "Une erreur est survenue." });
       } else {
-        setState({ status: "result", data: json.data, recipientName: data.recipientName });
+        saveToCache(data, json.data);
+        saveRecentSearch(data);
+        setRecentSearches(loadRecentSearches());
+        setTimeout(() => {
+          setState({ status: "result", data: json.data, recipientName: data.recipientName });
+          triggerConfetti();
+        }, 300);
       }
     } catch {
-      setState({ status: "error", message: "Network error. Please try again." });
+      clearInterval(ticker);
+      setState({ status: "error", message: "Erreur réseau. Merci de réessayer." });
     } finally {
-      clearInterval(interval);
+      clearInterval(msgInterval);
     }
-  };
+  }, []);
 
   return (
     <main className="min-h-screen flex flex-col items-center py-12 px-4 relative overflow-hidden">
+      {/* Dark mode toggle */}
+      <motion.button
+        onClick={toggleDark}
+        className="fixed top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-600 shadow-md flex items-center justify-center text-lg backdrop-blur-sm"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        title={darkMode ? "Mode clair" : "Mode sombre"}
+      >
+        {darkMode ? "☀️" : "🌙"}
+      </motion.button>
+
       {/* Animated background orbs */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <motion.div
@@ -102,17 +281,17 @@ export default function HomePage() {
           🎁 GiftSense
         </motion.h1>
         <motion.p
-          className="text-gray-500 max-w-sm mx-auto text-sm leading-relaxed"
+          className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-sm leading-relaxed"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.25, duration: 0.5 }}
         >
-          Paste a social media handle and our AI scans their public profile to
-          surface personalised gift ideas they&apos;ll actually love.
+          Colle un pseudo de réseau social et notre IA analyse le profil public
+          pour trouver des idées cadeaux personnalisées qu&apos;ils vont adorer.
         </motion.p>
 
         <motion.div
-          className="flex justify-center gap-5 mt-5"
+          className="flex justify-center gap-3 mt-5 flex-wrap"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.5 }}
@@ -120,7 +299,7 @@ export default function HomePage() {
           {PLATFORMS.map(({ icon, label }, i) => (
             <motion.span
               key={label}
-              className="flex items-center gap-1.5 text-xs text-gray-500 font-medium bg-white/70 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/80 shadow-sm"
+              className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 font-medium bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/80 dark:border-gray-600 shadow-sm"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.5 + i * 0.08, type: "spring", stiffness: 400, damping: 20 }}
@@ -139,13 +318,13 @@ export default function HomePage() {
           whileHover={{ scale: 1.06, boxShadow: "0 8px 24px -4px rgba(192,38,211,0.45)" }}
           whileTap={{ scale: 0.95 }}
         >
-          ▶ See a demo
+          ▶ Voir une démo
         </motion.button>
       </motion.div>
 
       {/* Glass card */}
       <motion.div
-        className="w-full max-w-xl glass rounded-3xl shadow-2xl shadow-brand-200/30 p-6 sm:p-8"
+        className="w-full max-w-xl glass dark:glass-dark rounded-3xl shadow-2xl shadow-brand-200/30 dark:shadow-purple-900/30 p-6 sm:p-8"
         initial={{ opacity: 0, y: 48, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
@@ -159,7 +338,12 @@ export default function HomePage() {
               exit={{ opacity: 0, x: 24 }}
               transition={{ duration: 0.35, ease: "easeInOut" }}
             >
-              <ProfileForm onSubmit={handleSubmit} loading={false} />
+              <ProfileForm
+                onSubmit={handleSubmit}
+                loading={false}
+                recentSearches={recentSearches}
+                prefill={prefill}
+              />
             </motion.div>
           )}
 
@@ -171,7 +355,7 @@ export default function HomePage() {
               exit={{ opacity: 0, scale: 0.93 }}
               transition={{ duration: 0.3 }}
             >
-              <LoadingSpinner message={loadingMsg} />
+              <LoadingSpinner message={loadingMsg} progress={progress} />
             </motion.div>
           )}
 
@@ -184,20 +368,20 @@ export default function HomePage() {
               className="space-y-4"
             >
               <motion.div
-                className="bg-red-50/80 border border-red-200 rounded-2xl p-4 text-sm text-red-700"
+                className="bg-red-50/80 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-sm text-red-700 dark:text-red-400"
                 initial={{ x: -8 }}
                 animate={{ x: 0 }}
                 transition={{ type: "spring", stiffness: 400, damping: 20 }}
               >
-                <strong className="font-semibold">Oops!</strong> {state.message}
+                <strong className="font-semibold">Oups !</strong> {state.message}
               </motion.div>
               <motion.button
                 onClick={() => setState({ status: "idle" })}
-                className="w-full py-3 rounded-2xl border-2 border-brand-200 text-brand-600 font-semibold bg-white/50"
+                className="w-full py-3 rounded-2xl border-2 border-brand-200 text-brand-600 font-semibold bg-white/50 dark:bg-gray-800/50 dark:border-brand-700 dark:text-brand-400"
                 whileHover={{ scale: 1.01, backgroundColor: "rgba(253,244,255,0.8)" }}
                 whileTap={{ scale: 0.98 }}
               >
-                Try Again
+                Réessayer
               </motion.button>
             </motion.div>
           )}
@@ -213,7 +397,10 @@ export default function HomePage() {
               <GiftResults
                 result={state.data}
                 recipientName={state.recipientName}
-                onReset={() => setState({ status: "idle" })}
+                onReset={() => {
+                  setState({ status: "idle" });
+                  window.history.replaceState(null, "", window.location.pathname);
+                }}
               />
             </motion.div>
           )}
@@ -222,13 +409,13 @@ export default function HomePage() {
 
       {/* Footer */}
       <motion.p
-        className="mt-8 text-xs text-gray-400 text-center max-w-sm"
+        className="mt-8 text-xs text-gray-400 dark:text-gray-500 text-center max-w-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1 }}
       >
-        GiftSense only analyses publicly available social media data.
-        No passwords or private access required.
+        GiftSense n&apos;analyse que les données publiques des réseaux sociaux.
+        Aucun mot de passe ni accès privé requis.
       </motion.p>
     </main>
   );

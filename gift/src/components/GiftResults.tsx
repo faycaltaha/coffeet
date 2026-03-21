@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AnalysisResult, GiftIdea } from "@/types";
-import { amazonUrl, secondMerchant } from "@/lib/affiliate";
+import { amazonUrl, secondMerchant } from "@/lib/affiliate-client";
 
 const AMAZON_TAG = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
 
@@ -66,12 +66,11 @@ function PlatformIcon({ platform }: { platform: string }) {
       </svg>
     );
   }
-  // fallback
   return <span className="text-sm">🔥</span>;
 }
 
 const BUDGET_FILTERS = [
-  { label: "All", max: Infinity },
+  { label: "Tout", max: Infinity },
   { label: "< €50", max: 50 },
   { label: "< €100", max: 100 },
   { label: "< €200", max: 200 },
@@ -104,18 +103,36 @@ function parseLowerPrice(range: string): number {
   return match ? parseInt(match[0], 10) : 0;
 }
 
-function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
+// Track affiliate link clicks in localStorage
+function trackClick(title: string, merchant: string) {
+  try {
+    const raw = localStorage.getItem("gift_clicks") || "[]";
+    const clicks: { title: string; merchant: string; ts: number }[] = JSON.parse(raw);
+    clicks.push({ title, merchant, ts: Date.now() });
+    localStorage.setItem("gift_clicks", JSON.stringify(clicks.slice(-200)));
+  } catch {}
+}
+
+interface GiftCardProps {
+  gift: GiftIdea;
+  index: number;
+  feedback: Record<string, "up" | "down">;
+  onFeedback: (title: string, type: "up" | "down") => void;
+}
+
+function GiftCard({ gift, index, feedback, onFeedback }: GiftCardProps) {
   const trendColor = gift.trendSource
     ? (TREND_SOURCE_COLORS[gift.trendSource] ?? "bg-orange-500 text-white")
     : null;
+  const myFeedback = feedback[gift.title];
 
   return (
     <motion.div
       variants={cardVariants}
-      className={`bg-white/80 backdrop-blur-sm rounded-2xl p-5 border flex flex-col gap-3 group ${
+      className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl p-5 border flex flex-col gap-3 group ${
         gift.trending
           ? "border-orange-300 ring-1 ring-orange-200 shadow-md shadow-orange-100/60"
-          : "border-white/70 shadow-sm shadow-brand-100/40"
+          : "border-white/70 dark:border-gray-700 shadow-sm shadow-brand-100/40"
       }`}
       whileHover={{
         y: -5,
@@ -129,7 +146,7 @@ function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
       {gift.trending && gift.trendSource && (
         <div className={`-mx-5 -mt-5 px-4 py-1.5 rounded-t-2xl flex items-center gap-2 text-xs font-semibold ${trendColor}`}>
           <PlatformIcon platform={getPlatformName(gift.trendSource)} />
-          <span>Trending on {getPlatformName(gift.trendSource)}</span>
+          <span>Tendance sur {getPlatformName(gift.trendSource)}</span>
         </div>
       )}
 
@@ -143,22 +160,22 @@ function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
           >
             {CARD_EMOJIS[index % CARD_EMOJIS.length]}
           </motion.span>
-          <h3 className="font-bold text-gray-900 leading-snug">{gift.title}</h3>
+          <h3 className="font-bold text-gray-900 dark:text-gray-100 leading-snug">{gift.title}</h3>
         </div>
-        <span className="shrink-0 text-sm font-semibold text-brand-600 bg-brand-50/80 px-3 py-1 rounded-full border border-brand-100">
+        <span className="shrink-0 text-sm font-semibold text-brand-600 bg-brand-50/80 dark:bg-brand-900/30 dark:text-brand-300 px-3 py-1 rounded-full border border-brand-100 dark:border-brand-800">
           {gift.priceRange}
         </span>
       </div>
 
       {/* Description */}
-      <p className="text-gray-600 text-sm leading-relaxed">{gift.description}</p>
+      <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{gift.description}</p>
 
       {/* Tags */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${categoryColor(gift.category)}`}>
           {gift.category}
         </span>
-        <span className="text-xs text-gray-400 italic">{gift.reason}</span>
+        <span className="text-xs text-gray-400 dark:text-gray-500 italic">{gift.reason}</span>
       </div>
 
       {/* Affiliate CTAs */}
@@ -170,6 +187,7 @@ function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
           className="flex-1 text-center py-2 rounded-xl text-sm font-semibold bg-amber-400 text-amber-900 shadow-sm"
           whileHover={{ scale: 1.03, backgroundColor: "#f59e0b" }}
           whileTap={{ scale: 0.97 }}
+          onClick={() => trackClick(gift.title, "Amazon")}
         >
           🛒 Amazon.fr
         </motion.a>
@@ -183,11 +201,43 @@ function GiftCard({ gift, index }: { gift: GiftIdea; index: number }) {
               className={`flex-1 text-center py-2 rounded-xl text-sm font-semibold ${merchant.className}`}
               whileHover={{ scale: 1.03, backgroundColor: merchant.hoverColor }}
               whileTap={{ scale: 0.97 }}
+              onClick={() => trackClick(gift.title, merchant.label)}
             >
               {merchant.icon} {merchant.label}
             </motion.a>
           );
         })()}
+      </div>
+
+      {/* Feedback */}
+      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-700">
+        <span className="text-xs text-gray-400 dark:text-gray-500 flex-1">Cette idée vous plaît ?</span>
+        <motion.button
+          onClick={() => onFeedback(gift.title, "up")}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-colors ${
+            myFeedback === "up"
+              ? "bg-green-100 dark:bg-green-900/40 text-green-600"
+              : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"
+          }`}
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.85 }}
+          title="J'aime cette idée"
+        >
+          👍
+        </motion.button>
+        <motion.button
+          onClick={() => onFeedback(gift.title, "down")}
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-colors ${
+            myFeedback === "down"
+              ? "bg-red-100 dark:bg-red-900/40 text-red-500"
+              : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"
+          }`}
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.85 }}
+          title="Cette idée ne convient pas"
+        >
+          👎
+        </motion.button>
       </div>
     </motion.div>
   );
@@ -204,6 +254,24 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
   const [trendingOnly, setTrendingOnly] = useState(false);
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [feedback, setFeedback] = useState<Record<string, "up" | "down">>({});
+
+  // Load persisted feedback
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("gift_feedback");
+      if (saved) setFeedback(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const handleFeedback = (title: string, type: "up" | "down") => {
+    const updated = { ...feedback, [title]: type };
+    setFeedback(updated);
+    try {
+      localStorage.setItem("gift_feedback", JSON.stringify(updated));
+    } catch {}
+  };
 
   const hasTrending = result.giftIdeas.some((g) => g.trending);
   const categories = Array.from(new Set(result.giftIdeas.map((g) => g.category.toLowerCase())));
@@ -216,7 +284,7 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
 
   const copyList = () => {
     const text = [
-      `🎁 Gift ideas for ${recipientName}`,
+      `🎁 Idées cadeaux pour ${recipientName}`,
       "",
       ...result.giftIdeas.map(
         (g, i) => `${i + 1}. ${g.title} — ${g.priceRange}\n   ${g.reason}`
@@ -228,6 +296,17 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
     });
   };
 
+  const shareLink = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    });
+  };
+
+  const exportPDF = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
       {/* Profile summary */}
@@ -237,7 +316,7 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
-        <h2 className="text-lg font-bold mb-1">Profile Summary for {recipientName}</h2>
+        <h2 className="text-lg font-bold mb-1">Profil de {recipientName}</h2>
         <p className="text-brand-100 text-sm leading-relaxed">{result.profileSummary}</p>
 
         {result.interests.length > 0 && (
@@ -269,7 +348,7 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15, duration: 0.35 }}
       >
-        <span className="text-xs font-semibold text-gray-500 mr-1">Budget:</span>
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Budget :</span>
         {BUDGET_FILTERS.map((f) => (
           <motion.button
             key={f.label}
@@ -277,7 +356,7 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
             className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
               maxBudget === f.max
                 ? "bg-brand-500 text-white border-brand-500 shadow"
-                : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300"
+                : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300 dark:bg-gray-800/70 dark:text-gray-300 dark:border-gray-600"
             }`}
             whileHover={{ scale: 1.06 }}
             whileTap={{ scale: 0.93 }}
@@ -291,15 +370,15 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
             className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1 transition-colors ${
               trendingOnly
                 ? "bg-orange-500 text-white border-orange-500 shadow"
-                : "bg-white/70 text-orange-500 border-orange-300 hover:border-orange-400"
+                : "bg-white/70 text-orange-500 border-orange-300 hover:border-orange-400 dark:bg-gray-800/70 dark:border-orange-700"
             }`}
             whileHover={{ scale: 1.06 }}
             whileTap={{ scale: 0.93 }}
           >
-            🔥 Trending only
+            🔥 Tendances seulement
           </motion.button>
         )}
-        <span className="ml-auto text-xs text-gray-400">{filtered.length} ideas</span>
+        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">{filtered.length} idées</span>
       </motion.div>
 
       {/* Category filters */}
@@ -310,13 +389,13 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.35 }}
         >
-          <span className="text-xs font-semibold text-gray-500 mr-1">Catégorie:</span>
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Catégorie :</span>
           <motion.button
             onClick={() => setActiveCategory(ALL_CATEGORIES)}
             className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
               activeCategory === ALL_CATEGORIES
                 ? "bg-brand-500 text-white border-brand-500 shadow"
-                : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300"
+                : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300 dark:bg-gray-800/70 dark:text-gray-300 dark:border-gray-600"
             }`}
             whileHover={{ scale: 1.06 }}
             whileTap={{ scale: 0.93 }}
@@ -330,7 +409,7 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
               className={`px-3 py-1 rounded-full text-xs font-semibold border capitalize transition-colors ${
                 activeCategory === cat
                   ? "bg-brand-500 text-white border-brand-500 shadow"
-                  : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300"
+                  : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300 dark:bg-gray-800/70 dark:text-gray-300 dark:border-gray-600"
               }`}
               whileHover={{ scale: 1.06 }}
               whileTap={{ scale: 0.93 }}
@@ -344,24 +423,24 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
       {/* Gift grid */}
       <div>
         <motion.h2
-          className="text-lg font-bold text-gray-900 mb-4"
+          className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
         >
-          🎁 {filtered.length} Perfect Gift Ideas
+          🎁 {filtered.length} idées cadeaux parfaites
         </motion.h2>
 
         <AnimatePresence mode="wait">
           {filtered.length === 0 ? (
             <motion.p
               key="empty"
-              className="text-center text-gray-400 text-sm py-8"
+              className="text-center text-gray-400 dark:text-gray-500 text-sm py-8"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              No gifts in this range. Try a higher budget filter.
+              Aucun cadeau dans cette fourchette. Essaie un budget plus élevé.
             </motion.p>
           ) : (
             <motion.div
@@ -372,38 +451,70 @@ export default function GiftResults({ result, recipientName, onReset }: Props) {
               animate="visible"
             >
               {filtered.map((gift, i) => (
-                <GiftCard key={`${gift.title}-${i}`} gift={gift} index={i} />
+                <GiftCard
+                  key={`${gift.title}-${i}`}
+                  gift={gift}
+                  index={i}
+                  feedback={feedback}
+                  onFeedback={handleFeedback}
+                />
               ))}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Share / copy list */}
-      <motion.button
-        onClick={copyList}
-        className="w-full py-3 rounded-2xl border-2 border-gray-200 text-gray-600 font-semibold bg-white/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm"
-        whileHover={{ scale: 1.01, backgroundColor: "rgba(249,250,251,0.9)" }}
-        whileTap={{ scale: 0.98 }}
-        transition={{ type: "spring", stiffness: 400, damping: 20 }}
-      >
-        {copied ? "✅ Liste copiée !" : "📋 Copier la liste pour partager"}
-      </motion.button>
+      {/* Action buttons row */}
+      <div className="flex gap-2 flex-wrap">
+        {/* Copy list */}
+        <motion.button
+          onClick={copyList}
+          className="flex-1 py-3 rounded-2xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm min-w-[130px]"
+          whileHover={{ scale: 1.01, backgroundColor: "rgba(249,250,251,0.9)" }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 400, damping: 20 }}
+        >
+          {copied ? "✅ Liste copiée !" : "📋 Copier la liste"}
+        </motion.button>
+
+        {/* Share link */}
+        <motion.button
+          onClick={shareLink}
+          className="flex-1 py-3 rounded-2xl border-2 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm min-w-[130px]"
+          whileHover={{ scale: 1.01, backgroundColor: "rgba(253,244,255,0.7)" }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 400, damping: 20 }}
+        >
+          {linkCopied ? "✅ Lien copié !" : "🔗 Partager"}
+        </motion.button>
+
+        {/* Export PDF */}
+        <motion.button
+          onClick={exportPDF}
+          className="py-3 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm"
+          whileHover={{ scale: 1.01, backgroundColor: "rgba(249,250,251,0.9)" }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 400, damping: 20 }}
+          title="Exporter en PDF"
+        >
+          🖨️ PDF
+        </motion.button>
+      </div>
 
       {/* Affiliate disclaimer */}
-      <p className="text-xs text-gray-400 text-center">
-        Amazon links may include an affiliate tag — we earn a small commission at no extra cost to you.
+      <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+        Les liens Amazon peuvent inclure un tag affilié — nous percevons une petite commission sans coût supplémentaire pour vous.
       </p>
 
       {/* Reset */}
       <motion.button
         onClick={onReset}
-        className="w-full py-3 rounded-2xl border-2 border-brand-200 text-brand-600 font-semibold bg-white/50 backdrop-blur-sm"
+        className="w-full py-3 rounded-2xl border-2 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm"
         whileHover={{ scale: 1.01, backgroundColor: "rgba(253,244,255,0.7)" }}
         whileTap={{ scale: 0.98 }}
         transition={{ type: "spring", stiffness: 400, damping: 20 }}
       >
-        Search Again
+        Nouvelle recherche
       </motion.button>
     </div>
   );
