@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Inscription — CarScan IDF</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body class="auth-page">
+
+<nav>
+  <a href="/" class="nav-brand">🚗 CarScan IDF</a>
+  <div class="nav-links">
+    <a href="/login.html">Se connecter</a>
+  </div>
+</nav>
+
+<div class="auth-container">
+  <div class="auth-card">
+    <h1>Créer un compte</h1>
+    <p class="auth-subtitle">Accédez au top 50 des meilleures affaires auto chaque jour — 5€/mois</p>
+    <div id="error-msg" class="error-msg hidden"></div>
+    <form id="register-form">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" placeholder="you@example.com" required autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label for="password">Mot de passe <span class="hint">(min. 8 caractères)</span></label>
+        <input type="password" id="password" placeholder="••••••••" required autocomplete="new-password" minlength="8"/>
+      </div>
+      <button type="submit" class="btn-primary btn-full" id="submit-btn">Créer mon compte</button>
+    </form>
+    <p class="auth-footer">Vous serez redirigé vers le paiement sécurisé Stripe (5€/mois).<br/>Résiliable à tout moment.</p>
+    <p class="auth-footer">Déjà un compte ? <a href="/login.html">Se connecter</a></p>
+  </div>
+</div>
+
+<script>
+  if (localStorage.getItem("token")) {
+    window.location.href = "/dashboard.html";
+  }
+
+  document.getElementById("register-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("submit-btn");
+    const errEl = document.getElementById("error-msg");
+    btn.disabled = true;
+    btn.textContent = "Création...";
+    errEl.classList.add("hidden");
+
+    try {
+      // 1. Register
+      const res = await fetch("/auth/register", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          email: document.getElementById("email").value,
+          password: document.getElementById("password").value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Erreur d'inscription");
+      localStorage.setItem("token", data.access_token);
+
+      // 2. Create Stripe checkout session
+      btn.textContent = "Redirection vers le paiement...";
+      const checkoutRes = await fetch("/stripe/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${data.access_token}`,
+        },
+      });
+      const checkoutData = await checkoutRes.json();
+      if (!checkoutRes.ok) throw new Error(checkoutData.detail || "Erreur Stripe");
+      window.location.href = checkoutData.url;
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove("hidden");
+      btn.disabled = false;
+      btn.textContent = "Créer mon compte";
+    }
+  });
+</script>
+</body>
+</html>

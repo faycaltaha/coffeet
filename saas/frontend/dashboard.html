@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — Trouve moi une voiture</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body class="dashboard-page">
+
+<!-- Animated background orbs -->
+<div class="orbs" aria-hidden="true">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- Toast notification (from GiftSense) -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- Shortlist drawer overlay -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+
+<!-- Shortlist Drawer (inspired by GiftCart) -->
+<aside class="shortlist-drawer" id="shortlist-drawer" role="dialog" aria-modal="true" aria-label="Ma sélection de voitures">
+  <div class="drawer-header">
+    <h2>🚗 Ma sélection <span class="drawer-count" id="drawer-count">0</span></h2>
+    <button class="drawer-close" id="drawer-close" aria-label="Fermer">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body">
+    <div class="drawer-empty">
+      <div class="empty-icon">🚗</div>
+      <strong>Sélection vide</strong>
+      <p>Clique sur "Sauvegarder" sur une voiture pour l'ajouter ici.</p>
+    </div>
+  </div>
+  <div class="drawer-footer" id="drawer-footer" style="display:none">
+    <div class="drawer-footer-actions">
+      <button class="btn-copy" id="btn-copy-list">📋 Copier la liste</button>
+      <button class="btn-clear" id="btn-clear-list">🗑 Vider</button>
+    </div>
+  </div>
+</aside>
+
+<nav>
+  <a href="/" class="nav-brand">🚗 Trouve moi une voiture</a>
+  <div class="nav-links">
+    <span id="user-email" class="user-email"></span>
+    <button class="shortlist-btn" id="shortlist-btn" aria-label="Ouvrir ma sélection">
+      🚗 Sélection
+      <span class="shortlist-badge" id="shortlist-badge" style="display:none">0</span>
+    </button>
+    <a href="#" id="manage-sub-btn" class="btn-ghost hidden">Abonnement</a>
+    <button id="logout-btn" class="btn-ghost">Déconnexion</button>
+  </div>
+</nav>
+
+<div class="dashboard-container">
+
+  <div class="dashboard-header">
+    <div>
+      <h1>Meilleures opportunités</h1>
+      <div id="scan-meta" class="scan-meta">Chargement...</div>
+    </div>
+  </div>
+
+  <!-- Preference chips (inspired by GiftSense ProfileForm chips) -->
+  <div class="chips-bar" id="chips-bar" style="display:none" role="group" aria-label="Filtres rapides">
+    <div class="chips-group">
+      <span class="chips-label">Type</span>
+      <button class="chip" data-filter="type" data-val="citadine">🚗 Citadine</button>
+      <button class="chip" data-filter="type" data-val="suv">🚙 SUV</button>
+      <button class="chip" data-filter="type" data-val="berline">🏎 Berline</button>
+      <button class="chip" data-filter="type" data-val="monospace">🚐 Monospace</button>
+    </div>
+    <div class="chips-group">
+      <span class="chips-label">Carburant</span>
+      <button class="chip" data-filter="fuel" data-val="essence">⛽ Essence</button>
+      <button class="chip" data-filter="fuel" data-val="diesel">⛽ Diesel</button>
+      <button class="chip" data-filter="fuel" data-val="hybride">⚡ Hybride</button>
+      <button class="chip" data-filter="fuel" data-val="electrique">⚡ Élec</button>
+    </div>
+    <div class="chips-group">
+      <span class="chips-label">Boîte</span>
+      <button class="chip" data-filter="gearbox" data-val="automatique">🔄 Auto</button>
+    </div>
+    <div class="chips-group">
+      <span class="chips-label">Budget</span>
+      <button class="chip" data-filter="budget" data-val="3000">&lt;3 000€</button>
+      <button class="chip" data-filter="budget" data-val="6000">&lt;6 000€</button>
+      <button class="chip" data-filter="budget" data-val="9000">&lt;9 000€</button>
+    </div>
+    <div class="chips-group">
+      <span class="chips-label">Profit</span>
+      <button class="chip" data-filter="profit" data-val="1000">&gt;1 000€</button>
+      <button class="chip" data-filter="profit" data-val="2500">&gt;2 500€</button>
+    </div>
+  </div>
+
+  <!-- Paywall -->
+  <div id="paywall-banner" class="paywall-banner hidden">
+    <div class="paywall-icon">🔒</div>
+    <div class="paywall-text">
+      <strong>Aperçu gratuit — 3 annonces sur <span id="paywall-total">50</span></strong>
+      <p>Abonnez-vous pour voir le classement complet avec prix, profits estimés et liens directs.</p>
+    </div>
+    <button id="subscribe-btn" class="btn-primary btn-sm">S'abonner — 5€/mois</button>
+  </div>
+
+  <div id="listings-container">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Chargement des annonces...</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const token = localStorage.getItem("token");
+if (!token) window.location.href = "/login.html";
+
+let allListings = [];
+let subscribed = false;
+let activeFilters = {};  // {fuel: "diesel", budget: "6000", ...}
+let feedback = JSON.parse(localStorage.getItem("car_feedback") || "{}");  // {adId: "up"|"down"}
+let dismissed = JSON.parse(localStorage.getItem("car_dismissed") || "[]");  // [adId]
+
+// Shortlist (like GiftCart)
+let shortlist = JSON.parse(localStorage.getItem("car_shortlist") || "[]");
+
+// ── Toast (from GiftSense Toast component) ─────────────────────────────────
+let toastTimer;
+function showToast(msg, type = "success") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = `toast toast-${type} visible`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = "toast"; }, 2500);
+}
+document.getElementById("toast").addEventListener("click", () => {
+  document.getElementById("toast").className = "toast";
+});
+
+// ── Shortlist (from use-cart.ts logic) ────────────────────────────────────
+function persistShortlist() {
+  localStorage.setItem("car_shortlist", JSON.stringify(shortlist));
+  updateShortlistUI();
+}
+
+function addToShortlist(car) {
+  if (shortlist.find(c => c.ad_id === car.ad_id)) return;
+  shortlist.push({...car, savedAt: Date.now()});
+  persistShortlist();
+  showToast("✅ Voiture ajoutée à ta sélection");
+}
+
+function removeFromShortlist(adId) {
+  shortlist = shortlist.filter(c => c.ad_id !== adId);
+  persistShortlist();
+  renderDrawer();
+  showToast("Retiré de la sélection");
+}
+
+function clearShortlist() {
+  shortlist = [];
+  persistShortlist();
+  renderDrawer();
+  showToast("Sélection vidée", "info");
+}
+
+function isInShortlist(adId) {
+  return shortlist.some(c => c.ad_id === adId);
+}
+
+function updateShortlistUI() {
+  const count = shortlist.length;
+  const badge = document.getElementById("shortlist-badge");
+  badge.textContent = count;
+  badge.style.display = count > 0 ? "flex" : "none";
+  document.getElementById("drawer-count").textContent = count;
+  document.getElementById("drawer-footer").style.display = count > 0 ? "flex" : "none";
+}
+
+// ── Drawer ─────────────────────────────────────────────────────────────────
+function openDrawer() {
+  document.getElementById("shortlist-drawer").classList.add("open");
+  document.getElementById("drawer-overlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+  renderDrawer();
+}
+function closeDrawer() {
+  document.getElementById("shortlist-drawer").classList.remove("open");
+  document.getElementById("drawer-overlay").classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+function renderDrawer() {
+  const body = document.getElementById("drawer-body");
+  if (shortlist.length === 0) {
+    body.innerHTML = `
+      <div class="drawer-empty">
+        <div class="empty-icon">🚗</div>
+        <strong>Sélection vide</strong>
+        <p>Clique sur "💾 Sauver" sur une voiture pour l'ajouter ici.</p>
+      </div>`;
+    return;
+  }
+
+  body.innerHTML = shortlist.map(car => `
+    <div class="drawer-item" id="di-${car.ad_id}">
+      <div class="drawer-item-header">
+        <div>
+          <div class="drawer-item-title">${car.title}</div>
+          ${car.estimated_profit > 0 ? `<div class="drawer-item-profit">+€${Number(car.estimated_profit).toLocaleString("fr-FR")} profit est.</div>` : ""}
+        </div>
+        <button class="drawer-item-remove" onclick="removeFromShortlist('${car.ad_id}')" aria-label="Retirer">✕</button>
+      </div>
+      <div class="drawer-item-meta">${car.year || "?"} · ${car.mileage ? Number(car.mileage).toLocaleString("fr-FR")+"km" : "?"} · ${car.fuel || "?"} · ${car.location || ""}</div>
+      <div class="drawer-item-meta">Achat : ${car.price ? "€"+Number(car.price).toLocaleString("fr-FR") : "?"} → Revente est. : ${car.estimated_resale ? "€"+Number(car.estimated_resale).toLocaleString("fr-FR") : "?"}</div>
+      <div class="drawer-item-links">
+        ${car.url ? `<a href="${car.url}" target="_blank" rel="noopener" class="link-lbc">🔗 leboncoin</a>` : ""}
+        <a href="${centraleUrl(car)}" target="_blank" rel="noopener" class="link-centrale">🔍 La Centrale</a>
+      </div>
+    </div>
+  `).join("");
+}
+
+function copyShortlist() {
+  const text = ["🚗 Ma sélection de voitures", ""].concat(
+    shortlist.map((car, i) =>
+      `${i+1}. ${car.title} — achat ${car.price ? "€"+car.price : "?"} · profit est. ${car.estimated_profit ? "+€"+car.estimated_profit : "?"}\n   ${car.url || ""}`
+    )
+  ).join("\n");
+  navigator.clipboard.writeText(text).then(() => showToast("📋 Liste copiée !"));
+}
+
+document.getElementById("shortlist-btn").addEventListener("click", openDrawer);
+document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+document.getElementById("drawer-overlay").addEventListener("click", closeDrawer);
+document.getElementById("btn-copy-list").addEventListener("click", copyShortlist);
+document.getElementById("btn-clear-list").addEventListener("click", clearShortlist);
+
+// ── Feedback (from GiftCard feedback) ─────────────────────────────────────
+function setFeedback(adId, type) {
+  if (feedback[adId] === type) {
+    delete feedback[adId];
+  } else {
+    feedback[adId] = type;
+    if (type === "down") {
+      dismissed.push(adId);
+      localStorage.setItem("car_dismissed", JSON.stringify(dismissed));
+    }
+  }
+  localStorage.setItem("car_feedback", JSON.stringify(feedback));
+  // update button states
+  const upBtn = document.querySelector(`[data-up="${adId}"]`);
+  const downBtn = document.querySelector(`[data-down="${adId}"]`);
+  if (upBtn) upBtn.className = `btn-feedback ${feedback[adId] === "up" ? "up-active" : ""}`;
+  if (downBtn) downBtn.className = `btn-feedback ${feedback[adId] === "down" ? "down-active" : ""}`;
+  if (type === "down") {
+    const card = document.querySelector(`[data-card="${adId}"]`);
+    if (card) { card.classList.add("dismissed"); }
+    showToast("Masquée", "info");
+  }
+}
+
+// ── Utility: multi-platform links ─────────────────────────────────────────
+function centraleUrl(car) {
+  const brand = car.brand ? encodeURIComponent(car.brand) : "";
+  const model = car.model ? encodeURIComponent(car.model) : "";
+  const priceMax = car.price ? Math.round(car.price * 1.2) : "";
+  return `https://www.lacentrale.fr/achat-vehicule-occasion.html?makesModelsCommercialNames=${brand}&priceMax=${priceMax}&yearMin=${car.year || ""}&categoryId=1`;
+}
+
+function argusUrl(car) {
+  const q = encodeURIComponent(`${car.brand || ""} ${car.model || ""}`.trim());
+  return `https://www.largus.fr/recherche/?q=${q}`;
+}
+
+// ── Filters ────────────────────────────────────────────────────────────────
+const TYPE_KEYWORDS = {
+  citadine: ["polo","clio","208","208","107","106","corsa","ibiza","c3","yaris","fiesta","106","107","108","i10","i20","up","aygo"],
+  suv: ["duster","captur","2008","tiguan","3008","5008","qashqai","cx-5","tuscon","kona","cx-3","crossland","mokka"],
+  berline: ["serie 3","serie 5","audi a3","audi a4","classe c","megane","508","308","golf","focus","a3","a4"],
+  monospace: ["berlingo","kangoo","c4 picasso","touran","sharan","espace","scenic","partner","zafira","combo"],
+};
+
+function matchesType(car, typeVal) {
+  if (!typeVal) return true;
+  const title = car.title.toLowerCase();
+  const keywords = TYPE_KEYWORDS[typeVal] || [];
+  return keywords.some(k => title.includes(k) || (car.model || "").toLowerCase().includes(k));
+}
+
+function applyFilters(listings) {
+  return listings.filter(car => {
+    const f = activeFilters;
+    if (f.fuel && car.fuel !== f.fuel) return false;
+    if (f.gearbox && car.gearbox !== f.gearbox) return false;
+    if (f.budget && car.price !== "???" && car.price > parseInt(f.budget)) return false;
+    if (f.profit && car.estimated_profit !== "???" && car.estimated_profit < parseInt(f.profit)) return false;
+    if (f.type && !matchesType(car, f.type)) return false;
+    if (dismissed.includes(car.ad_id)) return false;
+    return true;
+  });
+}
+
+// Chip click handler
+document.querySelectorAll(".chip[data-filter]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const filterKey = btn.dataset.filter;
+    const val = btn.dataset.val;
+    const isActive = btn.classList.contains("active");
+
+    // Deactivate same-group chips
+    document.querySelectorAll(`.chip[data-filter="${filterKey}"]`).forEach(b => b.classList.remove("active", "active-green"));
+
+    if (!isActive) {
+      activeFilters[filterKey] = val;
+      btn.classList.add(filterKey === "profit" ? "active-green" : "active");
+    } else {
+      delete activeFilters[filterKey];
+    }
+
+    // Persist preference chips
+    localStorage.setItem("car_prefs", JSON.stringify(activeFilters));
+    renderListings();
+    showToast("Filtre appliqué", "info");
+  });
+});
+
+// Restore saved preferences
+function restorePrefs() {
+  const saved = JSON.parse(localStorage.getItem("car_prefs") || "{}");
+  activeFilters = saved;
+  Object.entries(saved).forEach(([key, val]) => {
+    const btn = document.querySelector(`.chip[data-filter="${key}"][data-val="${val}"]`);
+    if (btn) btn.classList.add(key === "profit" ? "active-green" : "active");
+  });
+}
+
+// ── Score ring SVG (visual ROI indicator) ─────────────────────────────────
+function scoreRingSVG(score) {
+  const normalized = Math.min(100, Math.max(0, Math.round(score / 2)));
+  let color = "#4f9cf9";
+  if (normalized >= 60) color = "#22c55e";
+  else if (normalized >= 45) color = "#f59e0b";
+
+  return `<div class="score-ring-wrap" title="Score ROI: ${score}">
+    <svg class="score-ring" viewBox="0 0 36 36" aria-label="Score ${score}">
+      <circle class="ring-bg"   cx="18" cy="18" r="14" stroke-width="3"/>
+      <circle class="ring-fill" cx="18" cy="18" r="14" stroke-width="3"
+        stroke="${color}"
+        stroke-dasharray="${normalized} ${100 - normalized}"
+        stroke-dashoffset="0"/>
+      <text class="ring-text" x="18" y="14">${score}</text>
+    </svg>
+  </div>`;
+}
+
+// ── Auto-generate badges (from GiftSense trending badges) ──────────────────
+function getBadges(car) {
+  const badges = [];
+  if (car.blacklisted) {
+    badges.push(`<span class="badge-tag badge-risk">⚠️ Moteur risqué</span>`);
+    return badges;
+  }
+  if (car.estimated_profit > 0 && car.price > 0) {
+    const pct = Math.round((car.estimated_profit / car.price) * 100);
+    if (pct >= 50) badges.push(`<span class="badge-tag badge-undervalued">🔥 Sous-coté ${pct}%</span>`);
+    else if (pct >= 30) badges.push(`<span class="badge-tag badge-undervalued">📈 Marge ${pct}%</span>`);
+  }
+  if (car.roi_score >= 130) badges.push(`<span class="badge-tag badge-score">⭐ Score élevé</span>`);
+  if (car.mileage && car.mileage < 60000) badges.push(`<span class="badge-tag badge-lowkm">✅ Faible km</span>`);
+  if (car.gearbox === "automatique") badges.push(`<span class="badge-tag badge-auto">🔄 Auto</span>`);
+  if (car.fuel === "hybride" || car.fuel === "electrique") badges.push(`<span class="badge-tag badge-hybrid">⚡ ${car.fuel}</span>`);
+  return badges.slice(0, 3);
+}
+
+// ── Render listings ────────────────────────────────────────────────────────
+function fuelIcon(fuel) {
+  return {diesel:"⛽", essence:"⛽", hybride:"⚡", electrique:"⚡", gpl:"🔵"}[fuel] || "⛽";
+}
+
+function renderListings() {
+  const filtered = subscribed ? applyFilters(allListings) : allListings;
+  const container = document.getElementById("listings-container");
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state">Aucune annonce ne correspond aux filtres actuels.</div>`;
+    return;
+  }
+
+  const rows = filtered.map((car, i) => {
+    const inList = isInShortlist(car.ad_id);
+    const myFb = feedback[car.ad_id];
+    const isDismissed = dismissed.includes(car.ad_id);
+
+    const priceHtml = subscribed
+      ? `<span class="price-buy">${car.price ? "€"+Number(car.price).toLocaleString("fr-FR") : "—"}</span>`
+      : `<span class="price-locked">🔒</span>`;
+
+    const profitHtml = subscribed
+      ? (car.estimated_profit > 0 ? `<span class="profit-positive">+€${Number(car.estimated_profit).toLocaleString("fr-FR")}</span>` : "—")
+      : `<span class="price-locked">🔒</span>`;
+
+    const resaleHtml = subscribed && car.estimated_resale
+      ? `<span class="price-resale">€${Number(car.estimated_resale).toLocaleString("fr-FR")}</span>`
+      : `<span class="price-locked">🔒</span>`;
+
+    const imgHtml = car.images && car.images[0]
+      ? `<img src="${car.images[0]}" alt="${car.title}" class="car-thumb" loading="lazy"/>`
+      : `<div class="car-thumb-placeholder">🚗</div>`;
+
+    const badges = getBadges(car).join("");
+
+    const signals = (car.roi_reasons || []).slice(0, 3).map(s =>
+      `<span class="signal">${s}</span>`
+    ).join("");
+
+    const blacklistHtml = car.blacklisted
+      ? `<div class="blacklist-warning">⚠️ ${car.blacklist_reason}</div>`
+      : "";
+
+    // Multi-platform links (inspired by GiftSense's secondMerchant)
+    const buyLinksHtml = subscribed ? `
+      <div class="buy-links">
+        ${car.url ? `<a href="${car.url}" target="_blank" rel="noopener" class="btn-link" style="font-size:0.7rem;padding:4px 9px;" onclick="trackClick('${car.ad_id}','leboncoin')">🔗 leboncoin</a>` : ""}
+        <a href="${centraleUrl(car)}" target="_blank" rel="noopener" class="btn-link" style="font-size:0.7rem;padding:4px 9px;background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.25);color:var(--yellow);" onclick="trackClick('${car.ad_id}','lacentrale')">🔍 La Centrale</a>
+      </div>
+    ` : `<span class="price-locked" style="font-size:0.75rem">🔒 Abonnement requis</span>`;
+
+    // Action buttons (from GiftCard action row)
+    const actionsHtml = subscribed ? `
+      <div class="card-actions">
+        <button class="btn-shortlist ${inList ? "saved" : ""}"
+          onclick="toggleShortlist('${car.ad_id}')"
+          data-sl="${car.ad_id}"
+          aria-label="${inList ? "Retirer de la sélection" : "Sauvegarder"}">
+          ${inList ? "✅ Sauvé" : "💾 Sauver"}
+        </button>
+        <button class="btn-feedback ${myFb === "up" ? "up-active" : ""}"
+          data-up="${car.ad_id}"
+          onclick="setFeedback('${car.ad_id}','up')" aria-label="J'aime" title="Intéressant">👍</button>
+        <button class="btn-feedback ${myFb === "down" ? "down-active" : ""}"
+          data-down="${car.ad_id}"
+          onclick="setFeedback('${car.ad_id}','down')" aria-label="Pas pour moi" title="Masquer">👎</button>
+      </div>
+    ` : "";
+
+    return `
+    <article class="listing-card ${car.blacklisted ? "blacklisted" : ""} ${inList ? "in-shortlist" : ""} ${isDismissed ? "dismissed" : ""}"
+      data-card="${car.ad_id}">
+      <div class="listing-rank">#${i + 1}</div>
+      ${imgHtml}
+      <div class="listing-main">
+        <div class="listing-title" title="${car.title}">${car.title}</div>
+        <div class="listing-meta">
+          ${car.year || "?"} · ${car.mileage ? Number(car.mileage).toLocaleString("fr-FR")+" km" : "?"} ·
+          ${fuelIcon(car.fuel)} ${car.fuel || "?"} · ${car.location || "?"}
+        </div>
+        ${blacklistHtml}
+        <div class="listing-badges">${badges}</div>
+        <div class="listing-signals">${signals}</div>
+        ${actionsHtml}
+      </div>
+      <div class="listing-financials">
+        ${scoreRingSVG(car.roi_score)}
+        <div class="financial-row"><span class="label">Achat</span>${priceHtml}</div>
+        <div class="financial-row"><span class="label">Revente</span>${resaleHtml}</div>
+        <div class="financial-row"><span class="label">Profit</span>${profitHtml}</div>
+        ${buyLinksHtml}
+      </div>
+    </article>`;
+  }).join("");
+
+  container.innerHTML = `<div class="listings-list">${rows}</div>`;
+}
+
+function toggleShortlist(adId) {
+  const car = allListings.find(c => c.ad_id === adId);
+  if (!car) return;
+  if (isInShortlist(adId)) {
+    removeFromShortlist(adId);
+    const btn = document.querySelector(`[data-sl="${adId}"]`);
+    if (btn) { btn.textContent = "💾 Sauver"; btn.classList.remove("saved"); }
+    const card = document.querySelector(`[data-card="${adId}"]`);
+    if (card) card.classList.remove("in-shortlist");
+  } else {
+    addToShortlist(car);
+    const btn = document.querySelector(`[data-sl="${adId}"]`);
+    if (btn) { btn.textContent = "✅ Sauvé"; btn.classList.add("saved"); }
+    const card = document.querySelector(`[data-card="${adId}"]`);
+    if (card) card.classList.add("in-shortlist");
+  }
+  renderDrawer();
+}
+
+// ── Click tracking (from GiftSense tracking.ts) ────────────────────────────
+function trackClick(adId, platform) {
+  try {
+    const raw = localStorage.getItem("car_clicks") || "[]";
+    const clicks = JSON.parse(raw);
+    clicks.push({ adId, platform, ts: Date.now() });
+    localStorage.setItem("car_clicks", JSON.stringify(clicks.slice(-200)));
+  } catch {}
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+// Subscribe + manage buttons
+document.getElementById("logout-btn").addEventListener("click", () => {
+  localStorage.removeItem("token");
+  window.location.href = "/";
+});
+document.getElementById("subscribe-btn")?.addEventListener("click", async () => {
+  const btn = document.getElementById("subscribe-btn");
+  btn.disabled = true; btn.textContent = "Redirection...";
+  try {
+    const res = await fetch("/stripe/create-checkout-session", {
+      method: "POST",
+      headers: {"Authorization": `Bearer ${token}`},
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail);
+    window.location.href = data.url;
+  } catch (e) {
+    showToast("Erreur : " + e.message, "error");
+    btn.disabled = false; btn.textContent = "S'abonner — 5€/mois";
+  }
+});
+document.getElementById("manage-sub-btn")?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  try {
+    const res = await fetch("/stripe/create-portal-session", { method:"POST", headers:{"Authorization": `Bearer ${token}`} });
+    const data = await res.json();
+    window.location.href = data.url;
+  } catch (e) { showToast("Erreur : " + e.message, "error"); }
+});
+
+async function init() {
+  restorePrefs();
+  updateShortlistUI();
+
+  try {
+    const [meRes, lRes] = await Promise.all([
+      fetch("/api/me", { headers: {"Authorization": `Bearer ${token}`} }),
+      fetch("/api/listings", { headers: {"Authorization": `Bearer ${token}`} }),
+    ]);
+
+    if (!meRes.ok) { localStorage.removeItem("token"); window.location.href = "/login.html"; return; }
+    const me = await meRes.json();
+    document.getElementById("user-email").textContent = me.email;
+    if (me.subscription_status === "active") {
+      document.getElementById("manage-sub-btn").classList.remove("hidden");
+    }
+
+    const data = await lRes.json();
+    allListings = data.listings || [];
+    subscribed = data.subscribed;
+
+    const scanAt = data.scan_at
+      ? new Date(data.scan_at).toLocaleDateString("fr-FR", {day:"2-digit", month:"long", hour:"2-digit", minute:"2-digit"})
+      : "—";
+    document.getElementById("scan-meta").textContent =
+      `Mise à jour : ${scanAt} · ${data.total} annonces analysées`;
+
+    if (!subscribed) {
+      document.getElementById("paywall-banner").classList.remove("hidden");
+      document.getElementById("paywall-total").textContent = data.total || 50;
+    } else {
+      document.getElementById("chips-bar").style.display = "flex";
+    }
+
+    renderListings();
+  } catch (e) {
+    document.getElementById("listings-container").innerHTML =
+      `<div class="error-state">Erreur de chargement : ${e.message}</div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Trouve moi une voiture — Meilleures affaires auto en Île-de-France</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body class="landing">
+
+<!-- Animated orbs (from GiftSense page.tsx) -->
+<div class="orbs" aria-hidden="true">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<nav>
+  <div class="nav-brand">🚗 Trouve moi une voiture</div>
+  <div class="nav-links">
+    <a href="/login.html" class="btn-ghost btn-sm">Se connecter</a>
+    <a href="/register.html" class="btn-primary btn-sm">Commencer — 5€/mois</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-content">
+    <div class="badge">🗺️ Île-de-France · leboncoin.fr · Particuliers</div>
+    <h1>Les meilleures<br/><span class="accent">affaires auto</span><br/>livrées chaque matin</h1>
+    <p class="hero-sub">
+      Notre algorithme analyse chaque jour des centaines d'annonces privées,
+      score le potentiel ROI de chaque voiture et te livre le classement des meilleures opportunités.
+      Moteurs risqués blacklistés. Liens directs inclus.
+    </p>
+
+    <!-- Platform chips (from GiftSense's platform badges) -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:28px">
+      <span class="chip" style="cursor:default">🔍 Scan quotidien 7h</span>
+      <span class="chip" style="cursor:default">⚠️ Blacklist moteurs</span>
+      <span class="chip" style="cursor:default">📊 Score ROI</span>
+      <span class="chip" style="cursor:default">🔗 Liens directs</span>
+    </div>
+
+    <div class="hero-cta">
+      <a href="/register.html" class="btn-primary btn-lg">Essayer pour 5€/mois</a>
+      <span class="cta-note">Résiliable à tout moment · Stripe sécurisé</span>
+    </div>
+  </div>
+
+  <div class="hero-preview">
+    <!-- Preview card 1 -->
+    <div class="preview-card">
+      <div class="preview-header">
+        <div style="display:flex;gap:6px">
+          <span class="preview-score">⭐ Score 139</span>
+          <span class="preview-profit">🔥 Sous-coté 74%</span>
+        </div>
+        <span style="font-size:0.7rem;color:var(--muted)">#1</span>
+      </div>
+      <div class="preview-title">Dacia Duster 1.5 dCi 110 4x4</div>
+      <div class="preview-meta">2018 · 84 322 km · ⛽ Diesel · Créteil (94)</div>
+      <div class="preview-prices">
+        <span class="buy">Achat : <strong>3 900€</strong></span>
+        <span class="resale">→ Revente est. <strong>6 800€</strong></span>
+      </div>
+      <div class="preview-signals">
+        <span class="signal">Marque demandée</span>
+        <span class="signal">Modèle best-seller</span>
+        <span class="signal">Kilométrage correct</span>
+      </div>
+    </div>
+
+    <!-- Preview card 2 -->
+    <div class="preview-card">
+      <div class="preview-header">
+        <div style="display:flex;gap:6px">
+          <span class="preview-score">⭐ Score 121</span>
+          <span class="preview-profit">✅ Faible km</span>
+        </div>
+        <span style="font-size:0.7rem;color:var(--muted)">#2</span>
+      </div>
+      <div class="preview-title">Fiat 500 1.2 69ch Lounge</div>
+      <div class="preview-meta">2019 · 45 697 km · ⛽ Essence · Paris 15e (75)</div>
+      <div class="preview-prices">
+        <span class="buy">Achat : <strong>3 100€</strong></span>
+        <span class="resale">→ Revente est. <strong>10 600€</strong></span>
+      </div>
+      <div class="preview-signals">
+        <span class="signal">Véhicule récent</span>
+        <span class="signal">Excellent ratio km/an</span>
+        <span class="signal">Sous-coté 242%</span>
+      </div>
+    </div>
+
+    <!-- Blurred card 3 (teaser) -->
+    <div class="preview-card" style="filter:blur(4px);opacity:0.4;pointer-events:none;user-select:none" aria-hidden="true">
+      <div class="preview-header">
+        <span class="preview-score">⭐ Score 117</span>
+        <span class="preview-profit">🔄 Automatique</span>
+      </div>
+      <div class="preview-title">Volkswagen Polo 1.2 TSI 90</div>
+      <div class="preview-meta">2016 · 84 671 km · ⛽ Essence · Vitry (94)</div>
+      <div class="preview-prices">
+        <span class="buy">Achat : <strong>???</strong></span>
+        <span class="resale">→ Profit est. <strong>???</strong></span>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:-6px">
+      <a href="/register.html" style="font-size:0.8rem;color:var(--accent);font-weight:700">
+        🔓 Voir les 50 annonces →
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="how">
+  <h2>Comment ça marche</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-icon">🔍</div>
+      <h3>Scan à 7h chaque matin</h3>
+      <p>On parcourt automatiquement les annonces de particuliers sur leboncoin.fr en Île-de-France pour capturer les nouvelles annonces.</p>
+    </div>
+    <div class="step">
+      <div class="step-icon">🧠</div>
+      <h3>Score ROI multi-critères</h3>
+      <p>Chaque voiture est scorée sur 8 critères : marque, modèle, âge, kilométrage, carburant, boîte, sous-évaluation vs marché, ratio km/an.</p>
+    </div>
+    <div class="step">
+      <div class="step-icon">⚠️</div>
+      <h3>Blacklist moteur intégrée</h3>
+      <p>PureTech, TCe 115, BMW N47, EcoBoost 1.0... les moteurs à problèmes connus sont automatiquement flagués avant d'acheter.</p>
+    </div>
+    <div class="step">
+      <div class="step-icon">💾</div>
+      <h3>Sélection personnelle</h3>
+      <p>Sauvegarde les voitures qui t'intéressent dans ta sélection, copie la liste et accède directement aux annonces leboncoin + La Centrale.</p>
+    </div>
+  </div>
+</section>
+
+<section class="pricing">
+  <h2>Un tarif simple</h2>
+  <div class="price-card">
+    <div class="price-amount">5€<span>/mois</span></div>
+    <ul class="price-features">
+      <li>✅ Top 50 voitures classées chaque jour</li>
+      <li>✅ Score ROI + signaux détaillés</li>
+      <li>✅ Blacklist des moteurs problématiques</li>
+      <li>✅ Sélection personnelle (shortlist)</li>
+      <li>✅ Liens leboncoin + La Centrale</li>
+      <li>✅ Filtres : carburant, type, boîte, budget</li>
+      <li>✅ Mise à jour quotidienne automatique</li>
+      <li>✅ Résiliable à tout moment</li>
+    </ul>
+    <a href="/register.html" class="btn-primary btn-full">Commencer maintenant</a>
+  </div>
+</section>
+
+<footer>
+  <p>© 2025 Trouve moi une voiture · <a href="mailto:contact@trouvemoinevoiture.fr">contact@trouvemoinevoiture.fr</a></p>
+</footer>
+
+<script>
+  // Redirect if already logged in
+  if (localStorage.getItem("token")) {
+    fetch("/api/me", { headers: { "Authorization": "Bearer " + localStorage.getItem("token") } })
+      .then(r => r.ok ? window.location.href = "/dashboard.html" : null)
+      .catch(() => {});
+  }
+</script>
+</body>
+</html>
