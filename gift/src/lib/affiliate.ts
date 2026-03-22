@@ -8,6 +8,7 @@
  * Pour mettre à jour le cache : npm run awin:scan
  */
 
+import "server-only";
 import * as fs from "fs";
 import * as path from "path";
 import { buildDeepLinkSafe, EnrichedProgramme } from "./awin-client";
