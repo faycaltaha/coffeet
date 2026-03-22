@@ -19,7 +19,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   sport: "bg-teal-100 text-teal-700",
   travel: "bg-cyan-100 text-cyan-700",
   art: "bg-purple-100 text-purple-700",
-  default: "bg-gray-100 text-gray-700",
+  default: "bg-stone-100 text-stone-700",
 };
 
 const CARD_EMOJIS = ["🎁", "🎀", "💝", "✨", "🌟", "💫", "🎊", "🛍️"];
@@ -49,7 +49,6 @@ function categoryColor(cat: string) {
   return CATEGORY_COLORS[cat.toLowerCase()] ?? CATEGORY_COLORS.default;
 }
 
-
 export interface GiftCardProps {
   gift: GiftIdea;
   index: number;
@@ -60,6 +59,9 @@ export interface GiftCardProps {
   inCart: boolean;
   onAddToCart: (gift: GiftIdea) => void;
   onRemoveFromCart: (title: string) => void;
+  inWatch: boolean;
+  onAddToWatch: (gift: GiftIdea) => void;
+  onRemoveFromWatch: (title: string) => void;
 }
 
 const SWIPE_THRESHOLD = 80;
@@ -74,23 +76,21 @@ export default function GiftCard({
   inCart,
   onAddToCart,
   onRemoveFromCart,
+  inWatch,
+  onAddToWatch,
+  onRemoveFromWatch,
 }: GiftCardProps) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-180, 0, 180], [-8, 0, 8]);
-
-  // Left swipe → refresh hint opacity
   const refreshHintOpacity = useTransform(x, [-SWIPE_THRESHOLD, -20, 0], [1, 0.5, 0]);
-  // Right swipe → cart hint opacity
   const cartHintOpacity = useTransform(x, [0, 20, SWIPE_THRESHOLD], [0, 0.5, 1]);
-
   const isDismissed = useRef(false);
 
   const handleDragEnd = (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
-    const offset = info.offset.x;
-    const velocity = info.velocity.x;
+    const { x: offset } = info.offset;
+    const { x: velocity } = info.velocity;
 
     if ((offset < -SWIPE_THRESHOLD || velocity < -400) && canRefresh && !isDismissed.current) {
-      // Swipe left → refresh
       isDismissed.current = true;
       animate(x, -500, { duration: 0.3, ease: "easeIn" }).then(() => {
         onRefresh?.();
@@ -98,13 +98,11 @@ export default function GiftCard({
         isDismissed.current = false;
       });
     } else if (offset > SWIPE_THRESHOLD || velocity > 400) {
-      // Swipe right → add to cart
       animate(x, 500, { duration: 0.3, ease: "easeIn" }).then(() => {
         if (!inCart) onAddToCart(gift);
         x.set(0);
       });
     } else {
-      // Snap back
       animate(x, 0, { type: "spring", stiffness: 400, damping: 30 });
     }
   };
@@ -116,7 +114,7 @@ export default function GiftCard({
 
   return (
     <div className="relative select-none">
-      {/* Swipe-left hint: refresh */}
+      {/* Swipe-left hint */}
       {canRefresh && (
         <motion.div
           style={{ opacity: refreshHintOpacity }}
@@ -130,7 +128,7 @@ export default function GiftCard({
         </motion.div>
       )}
 
-      {/* Swipe-right hint: cart */}
+      {/* Swipe-right hint */}
       <motion.div
         style={{ opacity: cartHintOpacity }}
         aria-hidden="true"
@@ -150,22 +148,22 @@ export default function GiftCard({
         dragElastic={0.25}
         onDragEnd={handleDragEnd}
         aria-label={`Cadeau : ${gift.title}`}
-        className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl p-5 border flex flex-col gap-3 cursor-grab active:cursor-grabbing ${
+        className={`bg-white/85 dark:bg-stone-800/80 backdrop-blur-sm rounded-2xl p-5 border flex flex-col gap-3 cursor-grab active:cursor-grabbing ${
           gift.trending
-            ? "border-orange-300 ring-1 ring-orange-200 shadow-md shadow-orange-100/60"
-            : "border-white/70 dark:border-gray-700 shadow-sm shadow-brand-100/40"
+            ? "border-orange-200 ring-1 ring-orange-100 shadow-md shadow-orange-100/50"
+            : "border-stone-100/80 dark:border-stone-700 shadow-sm shadow-brand-200/30"
         }`}
         whileHover={{
           y: -4,
           boxShadow: gift.trending
-            ? "0 16px 40px -8px rgba(251,146,60,0.25)"
-            : "0 16px 40px -8px rgba(192,38,211,0.18)",
+            ? "0 16px 40px -8px rgba(251,146,60,0.22)"
+            : "0 16px 40px -8px rgba(200,139,92,0.18)",
           transition: { type: "spring", stiffness: 400, damping: 22 },
         }}
       >
-        {/* Swipe hint text (first card only) */}
+        {/* Swipe hint (first card only) */}
         {index === 0 && canRefresh && (
-          <p className="text-[10px] text-gray-300 dark:text-gray-600 text-center -mt-1 -mb-1 select-none">
+          <p className="text-[10px] text-stone-300 dark:text-stone-600 text-center -mt-1 -mb-1 select-none">
             ← glisse pour changer · glisse pour ajouter →
           </p>
         )}
@@ -192,25 +190,25 @@ export default function GiftCard({
             >
               {CARD_EMOJIS[index % CARD_EMOJIS.length]}
             </motion.span>
-            <h3 className="font-bold text-gray-900 dark:text-gray-100 leading-snug">{gift.title}</h3>
+            <h3 className="font-bold text-stone-900 dark:text-stone-100 leading-snug">{gift.title}</h3>
           </div>
           <span
             aria-label={`Prix : ${gift.priceRange}`}
-            className="shrink-0 text-sm font-semibold text-brand-600 bg-brand-50/80 dark:bg-brand-900/30 dark:text-brand-300 px-3 py-1 rounded-full border border-brand-100 dark:border-brand-800"
+            className="shrink-0 text-sm font-semibold text-brand-700 bg-brand-100/80 dark:bg-brand-900/30 dark:text-brand-300 px-3 py-1 rounded-full border border-brand-200 dark:border-brand-800"
           >
             {gift.priceRange}
           </span>
         </div>
 
         {/* Description */}
-        <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{gift.description}</p>
+        <p className="text-stone-600 dark:text-stone-300 text-sm leading-relaxed">{gift.description}</p>
 
         {/* Tags */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full capitalize ${categoryColor(gift.category)}`}>
             {gift.category}
           </span>
-          <span className="text-xs text-gray-400 dark:text-gray-500 italic">{gift.reason}</span>
+          <span className="text-xs text-stone-400 dark:text-stone-500 italic">{gift.reason}</span>
         </div>
 
         {/* Affiliate links */}
@@ -251,9 +249,9 @@ export default function GiftCard({
           })()}
         </div>
 
-        {/* Action row: cart + refresh + feedback */}
-        <div className="flex items-center gap-1.5 pt-1 border-t border-gray-100 dark:border-gray-700">
-          {/* Add / remove from cart */}
+        {/* Action row */}
+        <div className="flex items-center gap-1.5 pt-1 border-t border-stone-100 dark:border-stone-700">
+          {/* Cart */}
           <motion.button
             onClick={() => inCart ? onRemoveFromCart(gift.title) : onAddToCart(gift)}
             aria-label={inCart ? `Retirer "${gift.title}" du panier` : `Ajouter "${gift.title}" au panier`}
@@ -261,12 +259,28 @@ export default function GiftCard({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
               inCart
                 ? "bg-green-500 text-white border-green-500 shadow-sm"
-                : "bg-white/70 dark:bg-gray-800/70 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:border-green-400"
+                : "bg-white/70 dark:bg-stone-800/70 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-600 hover:border-green-400"
             }`}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.92 }}
           >
-            {inCart ? "✅ Dans le panier" : "🛒 + Panier"}
+            {inCart ? "✅ Panier" : "🛒 + Panier"}
+          </motion.button>
+
+          {/* Watch */}
+          <motion.button
+            onClick={() => inWatch ? onRemoveFromWatch(gift.title) : onAddToWatch(gift)}
+            aria-label={inWatch ? `Retirer l'alerte prix pour "${gift.title}"` : `Surveiller le prix de "${gift.title}"`}
+            aria-pressed={inWatch}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+              inWatch
+                ? "bg-brand-500 text-white border-brand-500 shadow-sm"
+                : "bg-white/70 dark:bg-stone-800/70 text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-600 hover:border-brand-300"
+            }`}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.92 }}
+          >
+            {inWatch ? "🔔" : "🔔"}
           </motion.button>
 
           {/* Refresh */}
@@ -274,45 +288,36 @@ export default function GiftCard({
             <motion.button
               onClick={onRefresh}
               aria-label="Voir une autre idée cadeau"
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-white/70 dark:bg-gray-800/70 text-orange-500 border-orange-200 dark:border-orange-700 hover:border-orange-400"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border bg-white/70 dark:bg-stone-800/70 text-orange-500 border-orange-200 dark:border-orange-700 hover:border-orange-400"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.92, rotate: 180 }}
               transition={{ type: "spring", stiffness: 400, damping: 20 }}
             >
-              🔄 Autre idée
+              🔄
             </motion.button>
           )}
 
-          {/* Spacer + feedback */}
+          {/* Feedback */}
           <div className="ml-auto flex items-center gap-1">
-            <motion.button
-              onClick={() => onFeedback(gift.title, "up")}
-              aria-label="J'aime cette idée"
-              aria-pressed={myFeedback === "up"}
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-sm transition-colors ${
-                myFeedback === "up"
-                  ? "bg-green-100 dark:bg-green-900/40 text-green-600"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"
-              }`}
-              whileHover={{ scale: 1.15 }}
-              whileTap={{ scale: 0.85 }}
-            >
-              👍
-            </motion.button>
-            <motion.button
-              onClick={() => onFeedback(gift.title, "down")}
-              aria-label="Cette idée ne me convient pas"
-              aria-pressed={myFeedback === "down"}
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-sm transition-colors ${
-                myFeedback === "down"
-                  ? "bg-red-100 dark:bg-red-900/40 text-red-500"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"
-              }`}
-              whileHover={{ scale: 1.15 }}
-              whileTap={{ scale: 0.85 }}
-            >
-              👎
-            </motion.button>
+            {(["up", "down"] as const).map((type) => (
+              <motion.button
+                key={type}
+                onClick={() => onFeedback(gift.title, type)}
+                aria-label={type === "up" ? "J'aime cette idée" : "Cette idée ne me convient pas"}
+                aria-pressed={myFeedback === type}
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-sm transition-colors ${
+                  myFeedback === type
+                    ? type === "up"
+                      ? "bg-green-100 dark:bg-green-900/40 text-green-600"
+                      : "bg-red-100 dark:bg-red-900/40 text-red-500"
+                    : "hover:bg-stone-100 dark:hover:bg-stone-700 text-stone-400"
+                }`}
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.85 }}
+              >
+                {type === "up" ? "👍" : "👎"}
+              </motion.button>
+            ))}
           </div>
         </div>
       </motion.article>

@@ -4,36 +4,26 @@ import { motion, AnimatePresence } from "framer-motion";
 import DrawerBase from "@/components/DrawerBase";
 import { amazonUrl, secondMerchant } from "@/lib/affiliate-client";
 import { trackClick } from "@/lib/tracking";
-import type { CartItem } from "@/lib/use-cart";
+import type { WatchedItem } from "@/types";
 
 const AMAZON_TAG = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
 
+function daysSince(ts: number) {
+  return Math.floor((Date.now() - ts) / 86_400_000);
+}
+
 interface Props {
-  items: CartItem[];
+  items: WatchedItem[];
   onRemove: (title: string) => void;
-  onClear: () => void;
   onClose: () => void;
   showToast?: (msg: string) => void;
 }
 
-export default function GiftCart({ items, onRemove, onClear, onClose, showToast }: Props) {
-  const copyCart = () => {
-    const text = [
-      `🛒 Ma liste de cadeaux (${items.length})`,
-      "",
-      ...items.map((item, i) => `${i + 1}. ${item.gift.title} — ${item.gift.priceRange}\n   ${item.gift.reason}`),
-    ].join("\n");
-    navigator.clipboard.writeText(text).then(() => showToast?.("📋 Liste du panier copiée !"));
-  };
-
-  const shareCart = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => showToast?.("🔗 Lien copié !"));
-  };
-
+export default function PriceWatchDrawer({ items, onRemove, onClose, showToast }: Props) {
   const header = (
     <div className="flex items-center gap-2">
-      <span className="text-2xl" aria-hidden="true">🛒</span>
-      <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">Mon panier</h2>
+      <span className="text-2xl" aria-hidden="true">🔔</span>
+      <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">Alertes prix</h2>
       {items.length > 0 && (
         <span className="bg-brand-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
           {items.length}
@@ -42,41 +32,8 @@ export default function GiftCart({ items, onRemove, onClear, onClose, showToast 
     </div>
   );
 
-  const footer = items.length > 0 ? (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <motion.button
-          onClick={copyCart}
-          aria-label="Copier la liste du panier"
-          className="flex-1 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 text-sm font-semibold bg-stone-50 dark:bg-stone-800"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          📋 Copier
-        </motion.button>
-        <motion.button
-          onClick={shareCart}
-          aria-label="Partager le panier"
-          className="flex-1 py-2.5 rounded-xl border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 text-sm font-semibold bg-brand-50/50 dark:bg-brand-900/20"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          🔗 Partager
-        </motion.button>
-      </div>
-      <motion.button
-        onClick={() => { onClear(); showToast?.("Panier vidé"); }}
-        aria-label="Vider le panier"
-        className="w-full py-2 rounded-xl text-xs text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium"
-        whileTap={{ scale: 0.98 }}
-      >
-        🗑 Vider le panier
-      </motion.button>
-    </div>
-  ) : undefined;
-
   return (
-    <DrawerBase ariaLabel="Mon panier de cadeaux" onClose={onClose} header={header} footer={footer}>
+    <DrawerBase ariaLabel="Alertes prix" onClose={onClose} header={header}>
       <AnimatePresence mode="popLayout">
         {items.length === 0 ? (
           <motion.div
@@ -92,16 +49,17 @@ export default function GiftCart({ items, onRemove, onClear, onClose, showToast 
               transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
               aria-hidden="true"
             >
-              🛒
+              🔔
             </motion.div>
-            <p className="text-stone-500 dark:text-stone-400 font-semibold">Votre panier est vide</p>
+            <p className="text-stone-500 dark:text-stone-400 font-semibold">Aucune alerte active</p>
             <p className="text-stone-400 dark:text-stone-500 text-sm">
-              Swipe à droite ou cliquez sur &ldquo;+ Panier&rdquo; pour ajouter une idée.
+              Cliquez sur 🔔 sur une idée cadeau pour surveiller son prix.
             </p>
           </motion.div>
         ) : (
           <ul className="divide-y divide-stone-100 dark:divide-stone-800">
             {items.map((item) => {
+              const days = daysSince(item.savedAt);
               const merchant = secondMerchant(item.gift.category);
               return (
                 <motion.li
@@ -114,17 +72,22 @@ export default function GiftCart({ items, onRemove, onClear, onClose, showToast 
                   className="px-5 py-4 flex flex-col gap-2"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-semibold text-sm text-stone-900 dark:text-stone-100 leading-snug">
                         {item.gift.title}
                       </p>
-                      <p className="text-xs text-brand-600 dark:text-brand-400 font-semibold mt-0.5">
-                        {item.gift.priceRange}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-xs text-brand-600 dark:text-brand-400 font-semibold">
+                          {item.gift.priceRange}
+                        </span>
+                        <span className="text-xs text-stone-400 dark:text-stone-500">
+                          {days === 0 ? "Sauvegardé aujourd'hui" : `Il y a ${days} j`}
+                        </span>
+                      </div>
                     </div>
                     <motion.button
-                      onClick={() => onRemove(item.gift.title)}
-                      aria-label={`Retirer "${item.gift.title}" du panier`}
+                      onClick={() => { onRemove(item.gift.title); showToast?.("Alerte supprimée"); }}
+                      aria-label={`Supprimer l'alerte pour "${item.gift.title}"`}
                       className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-stone-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30 transition-colors text-sm"
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
@@ -132,27 +95,25 @@ export default function GiftCart({ items, onRemove, onClear, onClose, showToast 
                       ✕
                     </motion.button>
                   </div>
-                  <p className="text-xs text-stone-500 dark:text-stone-400 italic leading-snug">
-                    {item.gift.reason}
-                  </p>
+
                   <div className="flex gap-2">
                     <motion.a
                       href={amazonUrl(item.gift.searchQuery, AMAZON_TAG)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={`Acheter "${item.gift.title}" sur Amazon.fr`}
+                      aria-label={`Vérifier le prix de "${item.gift.title}" sur Amazon.fr`}
                       className="flex-1 text-center py-1.5 rounded-lg text-xs font-semibold bg-amber-400 text-amber-900 shadow-sm"
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => trackClick(item.gift.title, "Amazon")}
                     >
-                      🛒 Amazon.fr
+                      🛒 Vérifier Amazon
                     </motion.a>
                     <motion.a
                       href={merchant.url(item.gift.searchQuery)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={`Acheter "${item.gift.title}" sur ${merchant.label}`}
+                      aria-label={`Vérifier le prix de "${item.gift.title}" sur ${merchant.label}`}
                       className={`flex-1 text-center py-1.5 rounded-lg text-xs font-semibold ${merchant.className}`}
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
