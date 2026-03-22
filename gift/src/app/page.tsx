@@ -4,39 +4,50 @@ import { useState } from "react";
 
 type Status = "idle" | "loading" | "ok" | "error";
 
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
 export default function HomePage() {
-  const [name, setName] = useState("Alex");
+  const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<Status>("idle");
-  const [result, setResult] = useState<string>("");
+  const [result, setResult] = useState("");
 
   const test = async () => {
+    if (!apiKey.trim()) return;
     setStatus("loading");
     setResult("");
+
     try {
-      const res = await fetch("/api/analyze", {
+      const res = await fetch(OPENROUTER_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${apiKey.trim()}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://coffeet.fr",
+        },
         body: JSON.stringify({
-          recipientName: name,
-          occasion: "Anniversaire",
-          budget: "€30–€75",
-          relationship: "Ami(e)",
-          interests: ["tech", "musique"],
-          profiles: [],
+          model: "perplexity/sonar-pro",
+          messages: [
+            {
+              role: "user",
+              content:
+                'Suggest 3 gift ideas for a friend who likes tech. Reply in JSON: {"gifts": [{"title":"...","price":"..."}]}',
+            },
+          ],
+          max_tokens: 300,
         }),
       });
+
       const json = await res.json();
-      if (json.success && json.data) {
-        const ideas = json.data.giftIdeas?.slice(0, 3) ?? [];
-        setResult(
-          `✅ API OK — ${ideas.length} idées reçues :\n` +
-            ideas.map((g: { title: string }) => `• ${g.title}`).join("\n")
-        );
-        setStatus("ok");
-      } else {
-        setResult(`❌ Erreur API : ${json.error}`);
+
+      if (!res.ok) {
+        setResult(`❌ HTTP ${res.status}: ${json.error?.message ?? JSON.stringify(json)}`);
         setStatus("error");
+        return;
       }
+
+      const content = json.choices?.[0]?.message?.content ?? "";
+      setResult(`✅ API OK !\n\nRéponse du modèle :\n${content}`);
+      setStatus("ok");
     } catch (e) {
       setResult(`❌ Erreur réseau : ${e instanceof Error ? e.message : String(e)}`);
       setStatus("error");
@@ -44,25 +55,26 @@ export default function HomePage() {
   };
 
   return (
-    <main style={{ maxWidth: 480, margin: "80px auto", padding: "0 16px", fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>🎁 GiftSense — Test API</h1>
-      <p style={{ color: "#777", fontSize: 14, marginBottom: 24 }}>
-        Teste si la clé OpenRouter fonctionne.
+    <main style={{ maxWidth: 480, margin: "60px auto", padding: "0 20px" }}>
+      <h1 style={{ fontSize: 22, marginBottom: 6 }}>🎁 GiftSense — Test clé OpenRouter</h1>
+      <p style={{ color: "#888", fontSize: 13, marginBottom: 24 }}>
+        Appel direct au modèle depuis le navigateur (test uniquement).
       </p>
 
-      <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
-        Prénom du destinataire
+      <label style={{ display: "block", fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+        Clé API OpenRouter
       </label>
       <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Alex"
+        type="password"
+        value={apiKey}
+        onChange={(e) => setApiKey(e.target.value)}
+        placeholder="sk-or-..."
         style={{
           width: "100%",
           padding: "10px 14px",
-          borderRadius: 10,
+          borderRadius: 8,
           border: "1px solid #ddd",
-          fontSize: 15,
+          fontSize: 14,
           marginBottom: 16,
           boxSizing: "border-box",
         }}
@@ -70,31 +82,31 @@ export default function HomePage() {
 
       <button
         onClick={test}
-        disabled={status === "loading" || !name.trim()}
+        disabled={status === "loading" || !apiKey.trim()}
         style={{
           width: "100%",
           padding: "12px",
-          borderRadius: 10,
+          borderRadius: 8,
           border: "none",
-          background: status === "loading" ? "#ccc" : "#c88b5c",
+          background: status === "loading" || !apiKey.trim() ? "#ccc" : "#c88b5c",
           color: "#fff",
           fontWeight: 700,
-          fontSize: 15,
-          cursor: status === "loading" ? "not-allowed" : "pointer",
+          fontSize: 14,
+          cursor: status === "loading" || !apiKey.trim() ? "not-allowed" : "pointer",
         }}
       >
-        {status === "loading" ? "Analyse en cours…" : "Tester l'API OpenRouter"}
+        {status === "loading" ? "Appel en cours…" : "Tester la clé"}
       </button>
 
       {result && (
         <pre
           style={{
-            marginTop: 24,
+            marginTop: 20,
             padding: 16,
-            borderRadius: 10,
+            borderRadius: 8,
             background: status === "ok" ? "#f0fdf4" : "#fff0f0",
             border: `1px solid ${status === "ok" ? "#86efac" : "#fca5a5"}`,
-            fontSize: 13,
+            fontSize: 12,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
           }}
