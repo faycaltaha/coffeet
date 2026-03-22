@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import type { AnalyzeRequest, AnalyzeResponse, AnalysisResult, GiftIdea } from "@/types";
+import { secondMerchant, amazonUrl } from "@/lib/affiliate";
 
 // Keywords that flag a gift as haram — checked against title + description + searchQuery
 const HARAM_KEYWORDS = [
@@ -35,23 +36,55 @@ const PLATFORM_URLS: Record<string, (handle: string) => string> = {
   youtube: (h) => `https://www.youtube.com/@${h}`,
 };
 
+// --- In-memory rate limiter: 10 requests per minute per IP ---
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return false;
+  }
+  if (entry.count >= 10) return true;
+  entry.count++;
+  return false;
+}
+
+// Clean up expired entries every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetAt) rateLimitMap.delete(ip);
+  }
+}, 3_600_000);
+
 export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeResponse>> {
+  // Rate limit check
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { success: false, error: "Trop de requêtes. Merci de réessayer dans une minute." },
+      { status: 429 }
+    );
+  }
+
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ success: false, error: "OpenRouter API key not configured." }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Clé API non configurée." }, { status: 500 });
   }
 
   let body: AnalyzeRequest;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ success: false, error: "Invalid request body." }, { status: 400 });
+    return NextResponse.json({ success: false, error: "Requête invalide." }, { status: 400 });
   }
 
   const { profiles, recipientName, occasion, budget, relationship, interests } = body;
 
   if (!profiles) {
-    return NextResponse.json({ success: false, error: "Invalid profiles field." }, { status: 400 });
+    return NextResponse.json({ success: false, error: "Champ profiles manquant." }, { status: 400 });
   }
 
   const client = new OpenAI({
@@ -64,10 +97,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<AnalyzeRespon
   });
 
   const currentYear = new Date().getFullYear();
-
   const hasProfiles = profiles.length > 0;
 
-  // Build profile URL list for the model to search
   const profileList = profiles
     .map((p) => `- ${p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}: ${PLATFORM_URLS[p.platform](p.handle)}`)
     .join("\n");
@@ -124,10 +155,10 @@ Always respond with VALID JSON only (no markdown fences) in this exact structure
   ]
 }
 
-Generate 6–8 diverse gift ideas spanning different price points within the budget. Include at least 2–3 currently trending items if relevant. Order: trending items first, then most-personalised, then general.`;
+Generate 10–12 diverse gift ideas spanning different price points within the budget. Include at least 3–4 currently trending items if relevant. Order: trending items first, then most-personalised, then general.`;
 
   const interestsLine = interests && interests.length > 0
-    ? `- Known interests: ${interests.join(", ")}`
+    ? `- Centres d'intérêt connus : ${interests.join(", ")}`
     : "";
 
   const userMessage = hasProfiles
@@ -163,26 +194,34 @@ ${interests && interests.length > 0 ? "3. Prioritise ideas that directly reflect
 
 Return only valid JSON. Set profileSummary to a short description of the gift recipient based on the provided interests and context (not based on any profile).`;
 
+  // AbortController for timeout (45 seconds)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45_000);
+
   try {
-    const response = await client.chat.completions.create({
-      model: "perplexity/sonar-pro",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      max_tokens: 4096,
-    });
+    const response = await client.chat.completions.create(
+      {
+        model: "perplexity/sonar-pro",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        max_tokens: 4096,
+      },
+      { signal: controller.signal }
+    );
+
+    clearTimeout(timeoutId);
 
     const finalText = response.choices[0]?.message?.content ?? "";
 
     if (!finalText) {
-      return NextResponse.json({ success: false, error: "No response from AI." }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Aucune réponse de l'IA." }, { status: 500 });
     }
 
-    // Extract JSON from text (strip any accidental markdown)
     const jsonMatch = finalText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return NextResponse.json({ success: false, error: "Could not parse AI response." }, { status: 500 });
+      return NextResponse.json({ success: false, error: "Impossible de lire la réponse de l'IA." }, { status: 500 });
     }
 
     const analysisResult: AnalysisResult = JSON.parse(jsonMatch[0]);
@@ -190,9 +229,33 @@ Return only valid JSON. Set profileSummary to a short description of the gift re
     // Safety net: strip any haram items the AI may have slipped through
     analysisResult.giftIdeas = filterHalal(analysisResult.giftIdeas);
 
+    // Inject server-side affiliate links (Awin deeplinks + Amazon tag)
+    const amazonTag = process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG;
+    for (const gift of analysisResult.giftIdeas) {
+      const merchant = secondMerchant(gift.category);
+      gift.affiliateLinks = {
+        amazon: amazonUrl(gift.searchQuery, amazonTag),
+        secondary: {
+          label: merchant.label,
+          url: merchant.url(gift.searchQuery),
+          icon: merchant.icon,
+          className: merchant.className,
+          hoverColor: merchant.hoverColor,
+          commissionPct: merchant.commissionPct,
+        },
+      };
+    }
+
     return NextResponse.json({ success: true, data: analysisResult });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    clearTimeout(timeoutId);
+    if (err instanceof Error && err.name === "AbortError") {
+      return NextResponse.json(
+        { success: false, error: "L'analyse a pris trop de temps. Merci de réessayer." },
+        { status: 504 }
+      );
+    }
+    const message = err instanceof Error ? err.message : "Erreur inconnue";
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
