@@ -164,7 +164,7 @@ export default function GiftResults({
       {/* Profile summary */}
       <motion.section
         aria-label={`Profil de ${recipientName}`}
-        className="bg-gradient-to-r from-brand-500 to-purple-600 rounded-2xl p-5 text-white shadow-lg shadow-brand-300/30"
+        className="bg-gradient-to-r from-brand-600 to-brand-400 rounded-2xl p-5 text-white shadow-lg shadow-brand-400/25"
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -198,7 +198,7 @@ export default function GiftResults({
       <div
         role="toolbar"
         aria-label="Filtres des cadeaux"
-        className="sticky top-2 z-20 -mx-6 sm:-mx-8 px-6 sm:px-8 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-white/60 dark:border-gray-700/60 space-y-2 no-print"
+        className="sticky top-2 z-20 -mx-6 sm:-mx-8 px-6 sm:px-8 py-3 bg-brand-50/92 dark:bg-stone-900/90 backdrop-blur-md border-b border-brand-100/60 dark:border-stone-700/60 space-y-2 no-print"
       >
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Budget :</span>

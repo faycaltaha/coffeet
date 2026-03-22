@@ -150,16 +150,16 @@ export default function GiftCard({
         dragElastic={0.25}
         onDragEnd={handleDragEnd}
         aria-label={`Cadeau : ${gift.title}`}
-        className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl p-5 border flex flex-col gap-3 cursor-grab active:cursor-grabbing ${
+        className={`bg-white/85 dark:bg-stone-800/80 backdrop-blur-sm rounded-2xl p-5 border flex flex-col gap-3 cursor-grab active:cursor-grabbing ${
           gift.trending
-            ? "border-orange-300 ring-1 ring-orange-200 shadow-md shadow-orange-100/60"
-            : "border-white/70 dark:border-gray-700 shadow-sm shadow-brand-100/40"
+            ? "border-orange-200 ring-1 ring-orange-100 shadow-md shadow-orange-100/50"
+            : "border-stone-100/80 dark:border-stone-700 shadow-sm shadow-brand-200/30"
         }`}
         whileHover={{
           y: -4,
           boxShadow: gift.trending
-            ? "0 16px 40px -8px rgba(251,146,60,0.25)"
-            : "0 16px 40px -8px rgba(192,38,211,0.18)",
+            ? "0 16px 40px -8px rgba(251,146,60,0.22)"
+            : "0 16px 40px -8px rgba(200,139,92,0.18)",
           transition: { type: "spring", stiffness: 400, damping: 22 },
         }}
       >
@@ -196,7 +196,7 @@ export default function GiftCard({
           </div>
           <span
             aria-label={`Prix : ${gift.priceRange}`}
-            className="shrink-0 text-sm font-semibold text-brand-600 bg-brand-50/80 dark:bg-brand-900/30 dark:text-brand-300 px-3 py-1 rounded-full border border-brand-100 dark:border-brand-800"
+            className="shrink-0 text-sm font-semibold text-brand-700 bg-brand-100/80 dark:bg-brand-900/30 dark:text-brand-300 px-3 py-1 rounded-full border border-brand-200 dark:border-brand-800"
           >
             {gift.priceRange}
           </span>

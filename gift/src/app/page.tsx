@@ -44,10 +44,10 @@ async function triggerConfetti() {
   try {
     const { default: confetti } = await import("canvas-confetti");
     confetti({
-      particleCount: 130,
-      spread: 80,
+      particleCount: 120,
+      spread: 75,
       origin: { y: 0.55 },
-      colors: ["#d946ef", "#a855f7", "#ec4899", "#f59e0b", "#10b981"],
+      colors: ["#C88B5C", "#E4B08A", "#F0D4BB", "#D4A574", "#F5E0C8"],
     });
   } catch {}
 }
@@ -207,22 +207,27 @@ export default function HomePage() {
           {darkMode ? "☀️" : "🌙"}
         </motion.button>
 
-        {/* Animated background orbs */}
+        {/* Animated background orbs – fluid motion */}
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
           <motion.div
-            className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-brand-300/25 blur-3xl"
-            animate={{ x: [0, 50, 0], y: [0, 40, 0] }}
-            transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full bg-[#F0D4BB]/30 blur-[80px]"
+            animate={{ x: [0, 60, 20, 0], y: [0, 50, -20, 0] }}
+            transition={{ duration: 32, repeat: Infinity, ease: "easeInOut" }}
           />
           <motion.div
-            className="absolute -bottom-32 -right-32 w-[550px] h-[550px] rounded-full bg-purple-300/25 blur-3xl"
-            animate={{ x: [0, -50, 0], y: [0, -40, 0] }}
-            transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -bottom-40 -right-40 w-[650px] h-[650px] rounded-full bg-[#FAF0E6]/40 blur-[80px]"
+            animate={{ x: [0, -50, -20, 0], y: [0, -40, 20, 0] }}
+            transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
           />
           <motion.div
-            className="absolute top-1/3 left-1/2 w-[350px] h-[350px] rounded-full bg-pink-200/20 blur-3xl"
-            animate={{ x: [0, 30, -30, 0], y: [0, -30, 30, 0] }}
-            transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-1/3 left-1/3 w-[500px] h-[500px] rounded-full bg-[#F5E8D8]/25 blur-[60px]"
+            animate={{ x: [0, 40, -40, 10, 0], y: [0, -30, 40, -10, 0] }}
+            transition={{ duration: 38, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="absolute top-0 right-1/4 w-[400px] h-[400px] rounded-full bg-[#FAEADE]/20 blur-[70px]"
+            animate={{ x: [0, -30, 30, 0], y: [0, 60, 20, 0] }}
+            transition={{ duration: 45, repeat: Infinity, ease: "easeInOut" }}
           />
         </div>
 
@@ -234,7 +239,7 @@ export default function HomePage() {
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
           <motion.h1
-            className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-purple-600 to-pink-500 mb-3 tracking-tight"
+            className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-stone-700 via-brand-600 to-brand-400 mb-3 tracking-tight"
             initial={{ scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
@@ -274,11 +279,11 @@ export default function HomePage() {
           <motion.button
             onClick={runDemo}
             aria-label="Voir une démonstration"
-            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-500 to-purple-500 text-white text-sm font-semibold shadow-lg shadow-brand-400/30"
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-500 to-brand-400 text-white text-sm font-semibold shadow-lg shadow-brand-400/25"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.7, type: "spring", stiffness: 300, damping: 20 }}
-            whileHover={{ scale: 1.06, boxShadow: "0 8px 24px -4px rgba(192,38,211,0.45)" }}
+            whileHover={{ scale: 1.06, boxShadow: "0 8px 24px -4px rgba(200,139,92,0.4)" }}
             whileTap={{ scale: 0.95 }}
           >
             ▶ Voir une démo
@@ -288,7 +293,7 @@ export default function HomePage() {
         {/* Glass card */}
         <motion.div
           ref={cardRef}
-          className="w-full max-w-xl glass dark:glass-dark rounded-3xl shadow-2xl shadow-brand-200/30 dark:shadow-purple-900/30 p-6 sm:p-8"
+          className="w-full max-w-xl glass dark:glass-dark rounded-3xl shadow-2xl shadow-brand-300/20 dark:shadow-brand-900/30 p-6 sm:p-8"
           initial={{ opacity: 0, y: 48, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
@@ -397,11 +402,11 @@ export default function HomePage() {
           <motion.button
             onClick={() => setCartOpen(true)}
             aria-label={`Ouvrir le panier (${cartItems.length} article${cartItems.length > 1 ? "s" : ""})`}
-            className="fixed bottom-6 right-6 z-[80] w-14 h-14 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 text-white shadow-xl shadow-brand-400/40 flex items-center justify-center text-2xl"
+            className="fixed bottom-6 right-6 z-[80] w-14 h-14 rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-white shadow-xl shadow-brand-400/35 flex items-center justify-center text-2xl"
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.12, boxShadow: "0 12px 32px -4px rgba(192,38,211,0.55)" }}
+            whileHover={{ scale: 1.12, boxShadow: "0 12px 32px -4px rgba(200,139,92,0.5)" }}
             whileTap={{ scale: 0.92 }}
             transition={{ type: "spring", stiffness: 380, damping: 28 }}
           >

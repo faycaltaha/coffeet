@@ -187,8 +187,8 @@ export default function ProfileForm({ onSubmit, loading, recentSearches, prefill
             >
               <div className="flex items-center gap-3">
                 <span className="text-xl w-8 text-center">{p.icon}</span>
-                <div className={`flex-1 flex items-center border rounded-xl shadow-sm overflow-hidden transition-all focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-transparent ${
-                  handleErrors[p.id] ? "border-red-400 bg-red-50/50" : "border-gray-200/80 bg-white/70 dark:bg-gray-800/70 dark:border-gray-600"
+                <div className={`flex-1 flex items-center border rounded-xl shadow-sm overflow-hidden transition-all focus-within:ring-2 focus-within:ring-brand-300 focus-within:border-transparent ${
+                  handleErrors[p.id] ? "border-red-400 bg-red-50/50" : "border-stone-200/80 bg-white/70 dark:bg-stone-800/70 dark:border-stone-600"
                 }`}>
                   <span className="pl-3 pr-1 text-gray-400 text-sm select-none">@</span>
                   <input
@@ -317,8 +317,8 @@ export default function ProfileForm({ onSubmit, loading, recentSearches, prefill
         <motion.button
           type="submit"
           disabled={!canSubmit || loading}
-          className="w-full py-3.5 px-6 rounded-2xl font-semibold text-white bg-gradient-to-r from-brand-500 to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-300/40"
-          whileHover={canSubmit && !loading ? { scale: 1.02, boxShadow: "0 12px 32px -4px rgba(192,38,211,0.45)" } : {}}
+          className="w-full py-3.5 px-6 rounded-2xl font-semibold text-white bg-gradient-to-r from-brand-600 to-brand-400 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-400/30"
+          whileHover={canSubmit && !loading ? { scale: 1.02, boxShadow: "0 12px 32px -4px rgba(200,139,92,0.4)" } : {}}
           whileTap={canSubmit && !loading ? { scale: 0.97 } : {}}
           transition={{ type: "spring", stiffness: 400, damping: 20 }}
         >
