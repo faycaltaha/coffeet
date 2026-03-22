@@ -1,498 +1,107 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import ProfileForm from "@/components/ProfileForm";
-import GiftResults from "@/components/GiftResults";
-import LoadingSpinner from "@/components/LoadingSpinner";
-import Toast, { type ToastType } from "@/components/Toast";
-import GiftCart from "@/components/GiftCart";
-import PriceWatchDrawer from "@/components/PriceWatchDrawer";
-import AgendaWidget from "@/components/AgendaWidget";
-import { useCart } from "@/lib/use-cart";
-import { useWatchlist } from "@/lib/use-watchlist";
-import type { AnalyzeRequest, AnalysisResult } from "@/types";
-import { DEMO_RESULT } from "@/lib/demo-data";
-import {
-  loadFromCache,
-  saveToCache,
-  loadRecentSearches,
-  saveRecentSearch,
-  encodeFormToUrl,
-  decodeUrlToForm,
-  type RecentSearch,
-} from "@/lib/storage";
+import { useState } from "react";
 
-type State =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "result"; data: AnalysisResult; recipientName: string }
-  | { status: "error"; message: string };
-
-const LOADING_MESSAGES = [
-  "Analyse des profils…",
-  "Découverte des centres d'intérêt…",
-  "Sélection des meilleures idées…",
-  "Préparation des cadeaux parfaits…",
-];
-
-const PLATFORMS = [
-  { icon: "📸", label: "Instagram" },
-  { icon: "🎵", label: "TikTok" },
-  { icon: "📌", label: "Pinterest" },
-  { icon: "▶️", label: "YouTube" },
-];
-
-async function triggerConfetti() {
-  try {
-    const { default: confetti } = await import("canvas-confetti");
-    confetti({
-      particleCount: 120,
-      spread: 75,
-      origin: { y: 0.55 },
-      colors: ["#C88B5C", "#E4B08A", "#F0D4BB", "#D4A574", "#F5E0C8"],
-    });
-  } catch {}
-}
+type Status = "idle" | "loading" | "ok" | "error";
 
 export default function HomePage() {
-  const [state, setState] = useState<State>({ status: "idle" });
-  const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
-  const [progress, setProgress] = useState(0);
-  const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [prefill, setPrefill] = useState<AnalyzeRequest | null>(null);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [watchOpen, setWatchOpen] = useState(false);
+  const [name, setName] = useState("Alex");
+  const [status, setStatus] = useState<Status>("idle");
+  const [result, setResult] = useState<string>("");
 
-  const { items: cartItems, addItem: addToCart, removeItem: removeFromCart, clearCart, isInCart } = useCart();
-  const { items: watchItems, addItem: addToWatch, removeItem: removeFromWatch, isWatched } = useWatchlist();
-
-  const [toast, setToast] = useState<{ message: string; type: ToastType; visible: boolean }>({
-    message: "", type: "success", visible: false,
-  });
-
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  const showToast = useCallback((message: string, type: ToastType = "success") => {
-    setToast({ message, type, visible: true });
-  }, []);
-
-  const dismissToast = useCallback(() => {
-    setToast((t) => ({ ...t, visible: false }));
-  }, []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("gift_dark");
-    if (saved === "1") { setDarkMode(true); document.documentElement.classList.add("dark"); }
-    setRecentSearches(loadRecentSearches());
-    const urlData = decodeUrlToForm();
-    if (urlData) setPrefill(urlData);
-  }, []);
-
-  const toggleDark = () => {
-    setDarkMode((prev) => {
-      const next = !prev;
-      document.documentElement.classList.toggle("dark", next);
-      localStorage.setItem("gift_dark", next ? "1" : "0");
-      return next;
-    });
-  };
-
-  const scrollToCard = () => {
-    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const runDemo = () => {
-    setState({ status: "loading" });
-    setProgress(0);
-    const timer = setInterval(() => setProgress((p) => Math.min(p + 8, 92)), 200);
-    scrollToCard();
-    setTimeout(() => {
-      clearInterval(timer);
-      setProgress(100);
-      setTimeout(() => {
-        setState({ status: "result", data: DEMO_RESULT, recipientName: "Alex" });
-        triggerConfetti();
-      }, 300);
-    }, 2200);
-  };
-
-  const handleSubmit = useCallback(async (data: AnalyzeRequest) => {
-    window.history.replaceState(null, "", `?${encodeFormToUrl(data)}`);
-
-    const cached = loadFromCache(data);
-    if (cached) {
-      setState({ status: "result", data: cached, recipientName: data.recipientName });
-      triggerConfetti();
-      showToast("Résultats chargés depuis le cache ⚡");
-      scrollToCard();
-      return;
-    }
-
-    setState({ status: "loading" });
-    setProgress(0);
-    scrollToCard();
-
-    const ticker = setInterval(() => {
-      setProgress((p) => {
-        if (p < 30) return p + 5;
-        if (p < 70) return p + 1.5;
-        if (p < 90) return p + 0.5;
-        return p;
-      });
-    }, 500);
-
-    let msgIdx = 0;
-    const msgInterval = setInterval(() => {
-      msgIdx = (msgIdx + 1) % LOADING_MESSAGES.length;
-      setLoadingMsg(LOADING_MESSAGES[msgIdx]);
-    }, 3000);
-
+  const test = async () => {
+    setStatus("loading");
+    setResult("");
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          recipientName: name,
+          occasion: "Anniversaire",
+          budget: "€30–€75",
+          relationship: "Ami(e)",
+          interests: ["tech", "musique"],
+          profiles: [],
+        }),
       });
       const json = await res.json();
-      clearInterval(ticker);
-      setProgress(100);
-
-      if (!json.success || !json.data) {
-        setState({ status: "error", message: json.error ?? "Une erreur est survenue." });
+      if (json.success && json.data) {
+        const ideas = json.data.giftIdeas?.slice(0, 3) ?? [];
+        setResult(
+          `✅ API OK — ${ideas.length} idées reçues :\n` +
+            ideas.map((g: { title: string }) => `• ${g.title}`).join("\n")
+        );
+        setStatus("ok");
       } else {
-        saveToCache(data, json.data);
-        saveRecentSearch(data);
-        setRecentSearches(loadRecentSearches());
-        setTimeout(() => {
-          setState({ status: "result", data: json.data, recipientName: data.recipientName });
-          triggerConfetti();
-        }, 300);
+        setResult(`❌ Erreur API : ${json.error}`);
+        setStatus("error");
       }
-    } catch {
-      clearInterval(ticker);
-      setState({ status: "error", message: "Erreur réseau. Merci de réessayer." });
-    } finally {
-      clearInterval(msgInterval);
+    } catch (e) {
+      setResult(`❌ Erreur réseau : ${e instanceof Error ? e.message : String(e)}`);
+      setStatus("error");
     }
-  }, [showToast]);
-
-  // Called from AgendaWidget → pre-fills and opens the form
-  const handleAgendaFindGift = useCallback(
-    ({ recipientName, occasion }: { recipientName: string; occasion: string }) => {
-      const data: AnalyzeRequest = {
-        recipientName,
-        occasion,
-        budget: "€30–€75",
-        relationship: "Best Friend",
-        interests: [],
-        profiles: [],
-      };
-      setPrefill(data);
-      setState({ status: "idle" });
-      scrollToCard();
-    },
-    []
-  );
+  };
 
   return (
-    <>
-      {/* Skip to content */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[300] focus:px-4 focus:py-2 focus:bg-brand-600 focus:text-white focus:rounded-xl focus:font-semibold"
+    <main style={{ maxWidth: 480, margin: "80px auto", padding: "0 16px", fontFamily: "sans-serif" }}>
+      <h1 style={{ fontSize: 24, marginBottom: 8 }}>🎁 GiftSense — Test API</h1>
+      <p style={{ color: "#777", fontSize: 14, marginBottom: 24 }}>
+        Teste si la clé OpenRouter fonctionne.
+      </p>
+
+      <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
+        Prénom du destinataire
+      </label>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Alex"
+        style={{
+          width: "100%",
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: "1px solid #ddd",
+          fontSize: 15,
+          marginBottom: 16,
+          boxSizing: "border-box",
+        }}
+      />
+
+      <button
+        onClick={test}
+        disabled={status === "loading" || !name.trim()}
+        style={{
+          width: "100%",
+          padding: "12px",
+          borderRadius: 10,
+          border: "none",
+          background: status === "loading" ? "#ccc" : "#c88b5c",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: 15,
+          cursor: status === "loading" ? "not-allowed" : "pointer",
+        }}
       >
-        Aller au contenu principal
-      </a>
+        {status === "loading" ? "Analyse en cours…" : "Tester l'API OpenRouter"}
+      </button>
 
-      <main id="main-content" className="min-h-screen flex flex-col items-center py-12 px-4 relative overflow-hidden">
-        {/* Dark mode toggle */}
-        <motion.button
-          onClick={toggleDark}
-          aria-label={darkMode ? "Passer en mode clair" : "Passer en mode sombre"}
-          aria-pressed={darkMode}
-          className="fixed top-4 right-4 z-50 w-10 h-10 rounded-full bg-white/80 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-600 shadow-md flex items-center justify-center text-lg backdrop-blur-sm"
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+      {result && (
+        <pre
+          style={{
+            marginTop: 24,
+            padding: 16,
+            borderRadius: 10,
+            background: status === "ok" ? "#f0fdf4" : "#fff0f0",
+            border: `1px solid ${status === "ok" ? "#86efac" : "#fca5a5"}`,
+            fontSize: 13,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
         >
-          {darkMode ? "☀️" : "🌙"}
-        </motion.button>
-
-        {/* Animated background orbs – fluid motion */}
-        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
-          <motion.div
-            className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full bg-[#F0D4BB]/30 blur-[80px]"
-            animate={{ x: [0, 60, 20, 0], y: [0, 50, -20, 0] }}
-            transition={{ duration: 32, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div
-            className="absolute -bottom-40 -right-40 w-[650px] h-[650px] rounded-full bg-[#FAF0E6]/40 blur-[80px]"
-            animate={{ x: [0, -50, -20, 0], y: [0, -40, 20, 0] }}
-            transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div
-            className="absolute top-1/3 left-1/3 w-[500px] h-[500px] rounded-full bg-[#F5E8D8]/25 blur-[60px]"
-            animate={{ x: [0, 40, -40, 10, 0], y: [0, -30, 40, -10, 0] }}
-            transition={{ duration: 38, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <motion.div
-            className="absolute top-0 right-1/4 w-[400px] h-[400px] rounded-full bg-[#FAEADE]/20 blur-[70px]"
-            animate={{ x: [0, -30, 30, 0], y: [0, 60, 20, 0] }}
-            transition={{ duration: 45, repeat: Infinity, ease: "easeInOut" }}
-          />
-        </div>
-
-        {/* Header */}
-        <motion.header
-          className="text-center mb-6"
-          initial={{ opacity: 0, y: -32 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <motion.h1
-            className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-stone-700 via-brand-600 to-brand-400 mb-3 tracking-tight"
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
-          >
-            🎁 GiftSense
-          </motion.h1>
-          <motion.p
-            className="text-stone-500 dark:text-stone-400 max-w-sm mx-auto text-sm leading-relaxed"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.25, duration: 0.5 }}
-          >
-            Colle un pseudo de réseau social et notre IA analyse le profil public
-            pour trouver des idées cadeaux personnalisées qu&apos;ils vont adorer.
-          </motion.p>
-
-          <motion.div
-            className="flex justify-center gap-3 mt-5 flex-wrap"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
-            aria-label="Réseaux sociaux supportés"
-          >
-            {PLATFORMS.map(({ icon, label }, i) => (
-              <motion.span
-                key={label}
-                className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400 font-medium bg-white/70 dark:bg-stone-800/70 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/80 dark:border-stone-600 shadow-sm"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5 + i * 0.08, type: "spring", stiffness: 400, damping: 20 }}
-              >
-                <span aria-hidden="true">{icon}</span> {label}
-              </motion.span>
-            ))}
-          </motion.div>
-
-          <motion.button
-            onClick={runDemo}
-            aria-label="Voir une démonstration"
-            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-500 to-brand-400 text-white text-sm font-semibold shadow-lg shadow-brand-400/25"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.7, type: "spring", stiffness: 300, damping: 20 }}
-            whileHover={{ scale: 1.06, boxShadow: "0 8px 24px -4px rgba(200,139,92,0.4)" }}
-            whileTap={{ scale: 0.95 }}
-          >
-            ▶ Voir une démo
-          </motion.button>
-        </motion.header>
-
-        {/* Agenda widget */}
-        <AgendaWidget onFindGift={handleAgendaFindGift} />
-
-        {/* Glass card */}
-        <motion.div
-          ref={cardRef}
-          className="w-full max-w-xl glass dark:glass-dark rounded-3xl shadow-2xl shadow-brand-300/20 dark:shadow-brand-900/30 p-6 sm:p-8"
-          initial={{ opacity: 0, y: 48, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <AnimatePresence mode="wait">
-            {state.status === "idle" && (
-              <motion.div
-                key="idle"
-                initial={{ opacity: 0, x: -24 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 24 }}
-                transition={{ duration: 0.35, ease: "easeInOut" }}
-              >
-                <ProfileForm
-                  onSubmit={handleSubmit}
-                  loading={false}
-                  recentSearches={recentSearches}
-                  prefill={prefill}
-                />
-              </motion.div>
-            )}
-
-            {state.status === "loading" && (
-              <motion.div
-                key="loading"
-                initial={{ opacity: 0, scale: 0.93 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.93 }}
-                transition={{ duration: 0.3 }}
-                aria-live="polite"
-                aria-label="Analyse en cours"
-              >
-                <LoadingSpinner message={loadingMsg} progress={progress} />
-              </motion.div>
-            )}
-
-            {state.status === "error" && (
-              <motion.div
-                key="error"
-                role="alert"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="space-y-4"
-              >
-                <motion.div
-                  className="bg-red-50/80 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-sm text-red-700 dark:text-red-400"
-                  initial={{ x: -8 }}
-                  animate={{ x: 0 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                >
-                  <strong className="font-semibold">Oups !</strong> {state.message}
-                </motion.div>
-                <motion.button
-                  onClick={() => setState({ status: "idle" })}
-                  className="w-full py-3 rounded-2xl border-2 border-brand-200 text-brand-600 font-semibold bg-white/50 dark:bg-stone-800/50 dark:border-brand-700 dark:text-brand-400"
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  Réessayer
-                </motion.button>
-              </motion.div>
-            )}
-
-            {state.status === "result" && (
-              <motion.div
-                key="result"
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -24 }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <GiftResults
-                  result={state.data}
-                  recipientName={state.recipientName}
-                  onReset={() => {
-                    setState({ status: "idle" });
-                    window.history.replaceState(null, "", window.location.pathname);
-                  }}
-                  showToast={showToast}
-                  cartItems={cartItems}
-                  onAddToCart={addToCart}
-                  onRemoveFromCart={removeFromCart}
-                  isInCart={isInCart}
-                  watchItems={watchItems}
-                  onAddToWatch={addToWatch}
-                  onRemoveFromWatch={removeFromWatch}
-                  isWatched={isWatched}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* Footer */}
-        <motion.footer
-          className="mt-8 text-xs text-stone-400 dark:text-stone-500 text-center max-w-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-        >
-          GiftSense n&apos;analyse que les données publiques des réseaux sociaux.
-          Aucun mot de passe ni accès privé requis.
-        </motion.footer>
-      </main>
-
-      {/* Floating buttons */}
-      <AnimatePresence>
-        {/* Cart button */}
-        <motion.button
-          onClick={() => setCartOpen(true)}
-          aria-label={`Ouvrir le panier (${cartItems.length} article${cartItems.length > 1 ? "s" : ""})`}
-          className="fixed bottom-6 right-6 z-[80] w-14 h-14 rounded-full bg-gradient-to-br from-brand-500 to-brand-400 text-white shadow-xl shadow-brand-400/35 flex items-center justify-center text-2xl"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          whileHover={{ scale: 1.12, boxShadow: "0 12px 32px -4px rgba(200,139,92,0.5)" }}
-          whileTap={{ scale: 0.92 }}
-          transition={{ type: "spring", stiffness: 380, damping: 28 }}
-        >
-          🛒
-          {cartItems.length > 0 && (
-            <motion.span
-              key={cartItems.length}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-stone-900"
-            >
-              {cartItems.length > 9 ? "9+" : cartItems.length}
-            </motion.span>
-          )}
-        </motion.button>
-
-        {/* Watch button */}
-        <motion.button
-          onClick={() => setWatchOpen(true)}
-          aria-label={`Ouvrir les alertes prix (${watchItems.length} alerte${watchItems.length > 1 ? "s" : ""})`}
-          className="fixed bottom-6 right-24 z-[80] w-12 h-12 rounded-full bg-white/90 dark:bg-stone-800/90 border border-brand-200 dark:border-brand-700 text-brand-600 shadow-lg flex items-center justify-center text-xl backdrop-blur-sm"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          whileHover={{ scale: 1.12 }}
-          whileTap={{ scale: 0.92 }}
-          transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.05 }}
-        >
-          🔔
-          {watchItems.length > 0 && (
-            <motion.span
-              key={watchItems.length}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand-500 text-white text-[9px] font-bold flex items-center justify-center border border-white dark:border-stone-900"
-            >
-              {watchItems.length > 9 ? "9+" : watchItems.length}
-            </motion.span>
-          )}
-        </motion.button>
-      </AnimatePresence>
-
-      {/* Drawers */}
-      <AnimatePresence>
-        {cartOpen && (
-          <GiftCart
-            items={cartItems}
-            onRemove={removeFromCart}
-            onClear={clearCart}
-            onClose={() => setCartOpen(false)}
-            showToast={showToast}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {watchOpen && (
-          <PriceWatchDrawer
-            items={watchItems}
-            onRemove={removeFromWatch}
-            onClose={() => setWatchOpen(false)}
-            showToast={showToast}
-          />
-        )}
-      </AnimatePresence>
-
-      <Toast message={toast.message} type={toast.type} visible={toast.visible} onDismiss={dismissToast} />
-    </>
+          {result}
+        </pre>
+      )}
+    </main>
   );
 }
