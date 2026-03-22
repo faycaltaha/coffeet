@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
-import type { AnalysisResult } from "@/types";
+import type { AnalysisResult, GiftIdea } from "@/types";
 import GiftCard from "@/components/GiftCard";
 import type { CartItem } from "@/lib/use-cart";
+import type { WatchedItem } from "@/types";
+import { encodeWishlist } from "@/lib/wishlist-share";
 
 const BUDGET_FILTERS = [
   { label: "Tout", max: Infinity },
@@ -36,7 +38,6 @@ function parseLowerPrice(range: string): number {
   return match ? parseInt(match[0], 10) : 0;
 }
 
-/** Animated number counter via framer-motion */
 function AnimatedCount({ to }: { to: number }) {
   const count = useMotionValue(0);
   const rounded = useTransform(count, (v) => Math.round(v));
@@ -53,9 +54,13 @@ interface Props {
   onReset: () => void;
   showToast?: (msg: string) => void;
   cartItems: CartItem[];
-  onAddToCart: (gift: import("@/types").GiftIdea) => void;
+  onAddToCart: (gift: GiftIdea) => void;
   onRemoveFromCart: (title: string) => void;
   isInCart: (title: string) => boolean;
+  watchItems: WatchedItem[];
+  onAddToWatch: (gift: GiftIdea) => void;
+  onRemoveFromWatch: (title: string) => void;
+  isWatched: (title: string) => boolean;
 }
 
 export default function GiftResults({
@@ -66,23 +71,23 @@ export default function GiftResults({
   onAddToCart,
   onRemoveFromCart,
   isInCart,
+  onAddToWatch,
+  onRemoveFromWatch,
+  isWatched,
 }: Props) {
   const [maxBudget, setMaxBudget] = useState(Infinity);
   const [trendingOnly, setTrendingOnly] = useState(false);
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
   const [feedback, setFeedback] = useState<Record<string, "up" | "down">>({});
 
-  // Pool management: displayed vs hidden pool
   const [displayedGifts, setDisplayedGifts] = useState(result.giftIdeas.slice(0, INITIAL_VISIBLE));
   const poolRef = useRef(result.giftIdeas.slice(INITIAL_VISIBLE));
 
-  // Reset when result changes
   useEffect(() => {
     setDisplayedGifts(result.giftIdeas.slice(0, INITIAL_VISIBLE));
     poolRef.current = result.giftIdeas.slice(INITIAL_VISIBLE);
   }, [result]);
 
-  // Load persisted feedback
   useEffect(() => {
     try {
       const saved = localStorage.getItem("gift_feedback");
@@ -101,48 +106,55 @@ export default function GiftResults({
   );
 
   const handleAddToCart = useCallback(
-    (gift: import("@/types").GiftIdea) => {
-      onAddToCart(gift);
-      showToast?.(`🛒 "${gift.title}" ajouté au panier !`);
-    },
+    (gift: GiftIdea) => { onAddToCart(gift); showToast?.(`🛒 "${gift.title}" ajouté au panier !`); },
     [onAddToCart, showToast]
   );
 
   const handleRemoveFromCart = useCallback(
-    (title: string) => {
-      onRemoveFromCart(title);
-      showToast?.("Retiré du panier");
-    },
+    (title: string) => { onRemoveFromCart(title); showToast?.("Retiré du panier"); },
     [onRemoveFromCart, showToast]
   );
 
-  /** Replace a gift (by title) with the next from the pool, cycling dismissed back in */
+  const handleAddToWatch = useCallback(
+    (gift: GiftIdea) => { onAddToWatch(gift); showToast?.(`🔔 Alerte prix activée pour "${gift.title}"`); },
+    [onAddToWatch, showToast]
+  );
+
+  const handleRemoveFromWatch = useCallback(
+    (title: string) => { onRemoveFromWatch(title); showToast?.("Alerte supprimée"); },
+    [onRemoveFromWatch, showToast]
+  );
+
   const refreshGift = useCallback(
     (title: string) => {
       const pool = poolRef.current;
-      if (pool.length === 0) {
-        showToast?.("Plus d'alternatives disponibles 😔");
-        return;
-      }
+      if (pool.length === 0) { showToast?.("Plus d'alternatives disponibles 😔"); return; }
       const [next, ...rest] = pool;
       const removed = displayedGifts.find((g) => g.title === title);
       setDisplayedGifts((prev) => prev.map((g) => (g.title === title ? next : g)));
-      // Put dismissed card at end of pool so it can cycle back
       poolRef.current = removed ? [...rest, removed] : rest;
     },
     [displayedGifts, showToast]
   );
 
+  const shareWishlist = useCallback(() => {
+    const encoded = encodeWishlist(recipientName, displayedGifts);
+    if (!encoded) { showToast?.("Erreur lors de la création de la wishlist"); return; }
+    const url = `${window.location.origin}/wishlist?d=${encoded}`;
+    navigator.clipboard.writeText(url).then(() =>
+      showToast?.("✨ Lien wishlist copié ! Partagez-le à vos proches.")
+    );
+  }, [recipientName, displayedGifts, showToast]);
+
   const hasTrending = displayedGifts.some((g) => g.trending);
   const categories = Array.from(new Set(displayedGifts.map((g) => g.category.toLowerCase())));
+  const canRefresh = poolRef.current.length > 0;
 
   const filtered = displayedGifts.filter((g) => {
     if (trendingOnly && !g.trending) return false;
     if (activeCategory !== ALL_CATEGORIES && g.category.toLowerCase() !== activeCategory) return false;
     return parseLowerPrice(g.priceRange) < maxBudget;
   });
-
-  const canRefresh = poolRef.current.length > 0;
 
   const copyList = () => {
     const text = [
@@ -153,11 +165,12 @@ export default function GiftResults({
     navigator.clipboard.writeText(text).then(() => showToast?.("📋 Liste copiée !"));
   };
 
-  const shareLink = () => {
-    navigator.clipboard.writeText(window.location.href).then(() =>
-      showToast?.("🔗 Lien copié ! Partagez-le à vos proches.")
-    );
-  };
+  const filterBtnClass = (active: boolean) =>
+    `px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+      active
+        ? "bg-brand-500 text-white border-brand-500 shadow"
+        : "bg-white/70 text-stone-600 border-stone-200 hover:border-brand-300 dark:bg-stone-800/70 dark:text-stone-300 dark:border-stone-600"
+    }`;
 
   return (
     <div className="space-y-5">
@@ -201,17 +214,13 @@ export default function GiftResults({
         className="sticky top-2 z-20 -mx-6 sm:-mx-8 px-6 sm:px-8 py-3 bg-brand-50/92 dark:bg-stone-900/90 backdrop-blur-md border-b border-brand-100/60 dark:border-stone-700/60 space-y-2 no-print"
       >
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Budget :</span>
+          <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 mr-1">Budget :</span>
           {BUDGET_FILTERS.map((f) => (
             <motion.button
               key={f.label}
               onClick={() => setMaxBudget(f.max)}
               aria-pressed={maxBudget === f.max}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                maxBudget === f.max
-                  ? "bg-brand-500 text-white border-brand-500 shadow"
-                  : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300 dark:bg-gray-800/70 dark:text-gray-300 dark:border-gray-600"
-              }`}
+              className={filterBtnClass(maxBudget === f.max)}
               whileHover={{ scale: 1.06 }}
               whileTap={{ scale: 0.93 }}
             >
@@ -225,7 +234,7 @@ export default function GiftResults({
               className={`ml-1 px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1 transition-colors ${
                 trendingOnly
                   ? "bg-orange-500 text-white border-orange-500 shadow"
-                  : "bg-white/70 text-orange-500 border-orange-300 hover:border-orange-400 dark:bg-gray-800/70 dark:border-orange-700"
+                  : "bg-white/70 text-orange-500 border-orange-300 hover:border-orange-400 dark:bg-stone-800/70 dark:border-orange-700"
               }`}
               whileHover={{ scale: 1.06 }}
               whileTap={{ scale: 0.93 }}
@@ -240,17 +249,13 @@ export default function GiftResults({
 
         {categories.length > 1 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Catégorie :</span>
+            <span className="text-xs font-semibold text-stone-500 dark:text-stone-400 mr-1">Catégorie :</span>
             {[ALL_CATEGORIES, ...categories].map((cat) => (
               <motion.button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
                 aria-pressed={activeCategory === cat}
-                className={`px-3 py-1 rounded-full text-xs font-semibold border capitalize transition-colors ${
-                  activeCategory === cat
-                    ? "bg-brand-500 text-white border-brand-500 shadow"
-                    : "bg-white/70 text-gray-600 border-gray-200 hover:border-brand-300 dark:bg-gray-800/70 dark:text-gray-300 dark:border-gray-600"
-                }`}
+                className={`${filterBtnClass(activeCategory === cat)} capitalize`}
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.93 }}
               >
@@ -264,7 +269,7 @@ export default function GiftResults({
       {/* Gift grid */}
       <section aria-label="Liste des idées cadeaux">
         <motion.h2
-          className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4"
+          className="text-lg font-bold text-stone-900 dark:text-stone-100 mb-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
@@ -289,10 +294,8 @@ export default function GiftResults({
               >
                 🎁
               </motion.div>
-              <p className="text-gray-500 dark:text-gray-400 font-semibold">Aucun cadeau dans cette sélection</p>
-              <p className="text-gray-400 dark:text-gray-500 text-sm">
-                Essaie un budget plus élevé ou retire un filtre.
-              </p>
+              <p className="text-stone-500 dark:text-stone-400 font-semibold">Aucun cadeau dans cette sélection</p>
+              <p className="text-stone-400 dark:text-stone-500 text-sm">Essaie un budget plus élevé ou retire un filtre.</p>
               <motion.button
                 onClick={() => { setMaxBudget(Infinity); setActiveCategory(ALL_CATEGORIES); setTrendingOnly(false); }}
                 className="px-5 py-2 rounded-full bg-brand-500 text-white text-sm font-semibold shadow"
@@ -323,6 +326,9 @@ export default function GiftResults({
                     inCart={isInCart(gift.title)}
                     onAddToCart={handleAddToCart}
                     onRemoveFromCart={handleRemoveFromCart}
+                    inWatch={isWatched(gift.title)}
+                    onAddToWatch={handleAddToWatch}
+                    onRemoveFromWatch={handleRemoveFromWatch}
                   />
                 </motion.div>
               ))}
@@ -330,10 +336,9 @@ export default function GiftResults({
           )}
         </AnimatePresence>
 
-        {/* Pool indicator */}
         {poolRef.current.length > 0 && (
           <motion.p
-            className="text-xs text-gray-400 dark:text-gray-500 text-center mt-3"
+            className="text-xs text-stone-400 dark:text-stone-500 text-center mt-3"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
@@ -348,25 +353,25 @@ export default function GiftResults({
         <motion.button
           onClick={copyList}
           aria-label="Copier la liste de cadeaux"
-          className="flex-1 py-3 rounded-2xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm min-w-[120px]"
+          className="flex-1 py-3 rounded-2xl border-2 border-stone-200 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-semibold bg-white/50 dark:bg-stone-800/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm min-w-[100px]"
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.98 }}
         >
           📋 Copier
         </motion.button>
         <motion.button
-          onClick={shareLink}
-          aria-label="Copier le lien de partage"
-          className="flex-1 py-3 rounded-2xl border-2 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm min-w-[120px]"
+          onClick={shareWishlist}
+          aria-label="Partager en wishlist"
+          className="flex-1 py-3 rounded-2xl border-2 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold bg-white/50 dark:bg-stone-800/50 backdrop-blur-sm flex items-center justify-center gap-2 text-sm min-w-[100px]"
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.98 }}
         >
-          🔗 Partager
+          ✨ Wishlist
         </motion.button>
         <motion.button
           onClick={() => window.print()}
           aria-label="Exporter en PDF"
-          className="py-3 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-sm"
+          className="py-3 px-4 rounded-2xl border-2 border-stone-200 dark:border-stone-600 text-stone-600 dark:text-stone-300 font-semibold bg-white/50 dark:bg-stone-800/50 backdrop-blur-sm text-sm"
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.98 }}
           title="Imprimer / PDF"
@@ -375,14 +380,14 @@ export default function GiftResults({
         </motion.button>
       </div>
 
-      <p className="text-xs text-gray-400 dark:text-gray-500 text-center no-print">
+      <p className="text-xs text-stone-400 dark:text-stone-500 text-center no-print">
         Les liens Amazon peuvent inclure un tag affilié — nous percevons une petite commission sans coût supplémentaire pour vous.
       </p>
 
       <motion.button
         onClick={onReset}
         aria-label="Lancer une nouvelle recherche"
-        className="w-full py-3 rounded-2xl border-2 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm no-print"
+        className="w-full py-3 rounded-2xl border-2 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold bg-white/50 dark:bg-stone-800/50 backdrop-blur-sm no-print"
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.98 }}
       >

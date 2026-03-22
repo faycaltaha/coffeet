@@ -49,3 +49,17 @@ export interface AnalyzeResponse {
   data?: AnalysisResult;
   error?: string;
 }
+
+// ── Agenda ────────────────────────────────────────────────────────────────────
+export interface AgendaEvent {
+  id: string;
+  name: string;
+  occasion: string;
+  date: string; // YYYY-MM-DD
+}
+
+// ── Price watchlist ───────────────────────────────────────────────────────────
+export interface WatchedItem {
+  gift: GiftIdea;
+  savedAt: number;
+}
