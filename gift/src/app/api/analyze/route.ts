@@ -255,6 +255,14 @@ Return only valid JSON. Set profileSummary to a short description of the gift re
         { status: 504 }
       );
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const status = (err as any)?.status ?? (err as any)?.response?.status;
+    if (status === 401) {
+      return NextResponse.json(
+        { success: false, error: "Clé OpenRouter invalide. Vérifie le fichier .env.local (OPENROUTER_API_KEY)." },
+        { status: 401 }
+      );
+    }
     const message = err instanceof Error ? err.message : "Erreur inconnue";
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
