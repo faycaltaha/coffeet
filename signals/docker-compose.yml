@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: marketsignal
+      POSTGRES_USER: signal
+      POSTGRES_PASSWORD: changeme
+    volumes:
+      - signal_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U signal -d marketsignal"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  signals-web:
+    build: .
+    ports:
+      - "8001:8001"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  signal_data:

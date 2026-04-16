@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Market Signal Monitor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-brand">Signal Monitor</span>
+  <div class="topbar-status">
+    <span id="collectors-health"></span>
+    <span class="refresh-indicator" id="refresh-status">Last update: --</span>
+  </div>
+</div>
+
+<div class="alert-banner" id="alert-banner"></div>
+
+<div class="container">
+  <div class="overview-cards">
+    <div class="card">
+      <div class="card-label">Signals (24h)</div>
+      <div class="card-value" id="total-signals">--</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Active Alerts</div>
+      <div class="card-value" id="active-alerts">--</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Highest Region Risk</div>
+      <div class="card-value" id="top-region-score">--</div>
+      <div class="card-sub" id="top-region-name">--</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Highest Sector Risk</div>
+      <div class="card-value" id="top-sector-score">--</div>
+      <div class="card-sub" id="top-sector-name">--</div>
+    </div>
+  </div>
+
+  <div class="score-grid">
+    <div class="card">
+      <div class="section-title">Region Risk</div>
+      <table class="score-table">
+        <thead><tr><th>Region</th><th>Score</th><th>Signals</th><th>Trend</th></tr></thead>
+        <tbody id="region-table"></tbody>
+      </table>
+    </div>
+    <div>
+      <div class="section-title">Sector Risk</div>
+      <div class="sector-cards" id="sector-cards"></div>
+    </div>
+  </div>
+
+  <div class="alerts-section">
+    <div class="section-title">Alerts</div>
+    <div class="filter-chips" id="alert-filters">
+      <button class="chip active" data-filter="all">All</button>
+      <button class="chip" data-filter="critical">Critical</button>
+      <button class="chip" data-filter="high">High</button>
+      <button class="chip" data-filter="medium">Medium</button>
+    </div>
+    <div id="alerts-list"></div>
+  </div>
+
+  <div class="signals-section">
+    <div class="section-title">Recent Signals</div>
+    <div class="filter-chips" id="source-filters">
+      <button class="chip active" data-filter="all">All</button>
+      <button class="chip" data-filter="gdelt">GDELT</button>
+      <button class="chip" data-filter="usgs">USGS</button>
+      <button class="chip" data-filter="fred">FRED</button>
+      <button class="chip" data-filter="eia">EIA</button>
+      <button class="chip" data-filter="rss">RSS</button>
+      <button class="chip" data-filter="yfinance">Finance</button>
+    </div>
+    <table class="signals-table">
+      <thead><tr><th>Time</th><th>Source</th><th>Category</th><th>Title</th><th>Region</th><th>Severity</th></tr></thead>
+      <tbody id="signals-table"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const API_KEY = localStorage.getItem('signal_api_key') || '';
+const headers = API_KEY ? {'X-API-Key': API_KEY} : {};
+let currentAlertFilter = 'all';
+let currentSourceFilter = 'all';
+
+function api(path) {
+  return fetch(path, {headers}).then(r => {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  });
+}
+
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+function scoreClass(v) { return v >= 70 ? 'high' : v >= 40 ? 'medium' : 'low'; }
+
+function trendArrow(t) {
+  if (t === 'rising') return '<span class="trend rising">&#9650;</span>';
+  if (t === 'falling') return '<span class="trend falling">&#9660;</span>';
+  return '<span class="trend stable">&#8212;</span>';
+}
+
+function sevColor(v) { return v >= 0.7 ? 'var(--red)' : v >= 0.4 ? 'var(--yellow)' : 'var(--green)'; }
+
+async function loadOverview() {
+  try {
+    const d = await api('/api/overview');
+    document.getElementById('total-signals').textContent = d.total_signals_24h;
+    document.getElementById('active-alerts').textContent = d.active_alerts;
+    if (d.top_regions.length) {
+      document.getElementById('top-region-score').textContent = d.top_regions[0].score.toFixed(0);
+      document.getElementById('top-region-name').textContent = d.top_regions[0].region;
+    }
+    if (d.top_sectors.length) {
+      document.getElementById('top-sector-score').textContent = d.top_sectors[0].score.toFixed(0);
+      document.getElementById('top-sector-name').textContent = d.top_sectors[0].sector;
+    }
+    const banner = document.getElementById('alert-banner');
+    const crit = d.recent_alerts.filter(a => !a.is_read && (a.severity==='critical'||a.severity==='high'));
+    if (crit.length) { banner.textContent = crit.length+' unread alert(s): '+crit[0].title; banner.classList.add('visible'); }
+    else { banner.classList.remove('visible'); }
+    document.getElementById('collectors-health').innerHTML = d.collectors.map(c =>
+      '<span class="health-dot '+c.status+'" title="'+c.collector_name+': '+c.status+'"></span>'
+    ).join('');
+  } catch(e) { console.error('Overview failed:', e); }
+}
+
+async function loadRegions() {
+  try {
+    const regions = await api('/api/scores/regions');
+    document.getElementById('region-table').innerHTML = regions.map(r => '<tr>'
+      +'<td>'+r.region+'</td>'
+      +'<td><div style="display:flex;align-items:center;gap:8px"><span>'+r.score.toFixed(0)+'</span>'
+      +'<div class="score-bar" style="width:80px"><div class="score-bar-fill '+scoreClass(r.score)+'" style="width:'+r.score+'%"></div></div></div></td>'
+      +'<td>'+r.signal_count+'</td>'
+      +'<td>'+trendArrow(r.trend)+'</td>'
+      +'</tr>').join('');
+  } catch(e) { console.error('Regions failed:', e); }
+}
+
+async function loadSectors() {
+  try {
+    const sectors = await api('/api/scores/sectors');
+    document.getElementById('sector-cards').innerHTML = sectors.map(s =>
+      '<div class="sector-card"><div class="sector-card-header">'
+      +'<span class="sector-name">'+s.sector+'</span>'
+      +'<span class="sector-score" style="color:'+(s.score>=70?'var(--red)':s.score>=40?'var(--yellow)':'var(--green)')+'">'+s.score.toFixed(0)+'</span>'
+      +'</div><div class="score-bar"><div class="score-bar-fill '+scoreClass(s.score)+'" style="width:'+s.score+'%"></div></div>'
+      +'<div style="margin-top:6px;font-size:.8rem;color:var(--text-muted)">'+s.signal_count+' signals '+trendArrow(s.trend)+'</div></div>'
+    ).join('');
+  } catch(e) { console.error('Sectors failed:', e); }
+}
+
+async function loadAlerts() {
+  try {
+    const p = currentAlertFilter !== 'all' ? '?severity='+currentAlertFilter : '';
+    const alerts = await api('/api/alerts'+p);
+    const el = document.getElementById('alerts-list');
+    if (!alerts.length) { el.innerHTML = '<div style="color:var(--text-muted);padding:16px">No alerts</div>'; return; }
+    el.innerHTML = alerts.map(a =>
+      '<div class="alert-item"><span class="badge '+a.severity+'">'+a.severity+'</span>'
+      +'<div class="alert-body"><div class="alert-title">'+a.title+'</div>'
+      +'<div class="alert-desc">'+(a.description||'')+'</div>'
+      +'<div class="alert-time">'+timeAgo(a.created_at)+'</div></div>'
+      +'<div class="alert-actions">'+(a.is_read?'':'<button class="btn-read" onclick="markRead('+a.id+')">Mark read</button>')+'</div></div>'
+    ).join('');
+  } catch(e) { console.error('Alerts failed:', e); }
+}
+
+async function loadSignals() {
+  try {
+    const p = currentSourceFilter !== 'all' ? '?source='+currentSourceFilter : '';
+    const signals = await api('/api/signals'+p);
+    document.getElementById('signals-table').innerHTML = signals.map(s =>
+      '<tr><td>'+timeAgo(s.signal_time)+'</td><td>'+s.source+'</td><td>'+s.category+'</td>'
+      +'<td>'+s.title.substring(0,80)+(s.title.length>80?'...':'')+'</td>'
+      +'<td>'+(s.region||'-')+'</td>'
+      +'<td><span class="severity-dot" style="background:'+sevColor(s.severity)+'"></span> '+(s.severity*100).toFixed(0)+'%</td></tr>'
+    ).join('');
+  } catch(e) { console.error('Signals failed:', e); }
+}
+
+async function markRead(id) {
+  await fetch('/api/alerts/'+id+'/read', {method:'PATCH', headers});
+  loadAlerts(); loadOverview();
+}
+
+function setupChips(cid, cb) {
+  document.getElementById(cid).addEventListener('click', e => {
+    if (!e.target.classList.contains('chip')) return;
+    document.querySelectorAll('#'+cid+' .chip').forEach(c => c.classList.remove('active'));
+    e.target.classList.add('active');
+    cb(e.target.dataset.filter);
+  });
+}
+setupChips('alert-filters', f => { currentAlertFilter=f; loadAlerts(); });
+setupChips('source-filters', f => { currentSourceFilter=f; loadSignals(); });
+
+async function refresh() {
+  const el = document.getElementById('refresh-status');
+  el.textContent = 'Refreshing...'; el.classList.add('refreshing');
+  await Promise.all([loadOverview(), loadRegions(), loadSectors(), loadAlerts(), loadSignals()]);
+  el.textContent = 'Updated: ' + new Date().toLocaleTimeString(); el.classList.remove('refreshing');
+}
+refresh();
+setInterval(refresh, 300000);
+</script>
+</body>
+</html>
