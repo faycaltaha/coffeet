@@ -5,9 +5,16 @@
         "source": "github",
         "repo": "affaan-m/everything-claude-code"
       }
+    },
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
     }
   },
   "enabledPlugins": {
-    "everything-claude-code@everything-claude-code": true
+    "everything-claude-code@everything-claude-code": true,
+    "caveman@caveman": true
   }
 }
