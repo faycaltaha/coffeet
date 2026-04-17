@@ -17,16 +17,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import SIGNAL_API_KEY
 from .database import get_db, init_db
-from .models import Alert, CollectorStatus, RegionScore, SectorScore, Signal
+from .models import (
+    Alert,
+    CollectorStatus,
+    Crisis,
+    CrisisSignalLink,
+    RegionScore,
+    SectorScore,
+    Signal,
+    SignalPattern,
+)
 from .schemas import (
     AlertOut,
     CollectorStatusOut,
+    CrisisDetail,
+    CrisisOut,
+    CrisisSignalLinkOut,
     OverviewOut,
     RegionScoreOut,
     ScoreHistory,
     SectorScoreOut,
     SignalDetail,
     SignalOut,
+    SignalPatternOut,
 )
 from .scheduler import run_collector, run_scoring_and_alerts
 
@@ -314,6 +327,80 @@ async def overview(
         recent_alerts=alerts_result.scalars().all(),
         collectors=collectors_result.scalars().all(),
     )
+
+
+# ── Crises ─────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/crises", response_model=list[CrisisOut])
+async def list_crises(
+    crisis_type: str | None = None,
+    region: str | None = None,
+    sector: str | None = None,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    query = select(Crisis).order_by(Crisis.start_date.desc()).limit(limit)
+    if crisis_type:
+        query = query.where(Crisis.crisis_type == crisis_type)
+    if region:
+        query = query.where(Crisis.region == region)
+    if sector:
+        query = query.where(Crisis.sector == sector)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.get("/api/crises/{crisis_id}", response_model=CrisisDetail)
+async def get_crisis(
+    crisis_id: int,
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    result = await db.execute(select(Crisis).where(Crisis.id == crisis_id))
+    crisis = result.scalar_one_or_none()
+    if not crisis:
+        raise HTTPException(status_code=404, detail="Crisis not found")
+    links_result = await db.execute(
+        select(CrisisSignalLink).where(CrisisSignalLink.crisis_id == crisis_id)
+    )
+    links = links_result.scalars().all()
+    return CrisisDetail.model_validate(crisis, from_attributes=True).model_copy(
+        update={"links": [CrisisSignalLinkOut.model_validate(l, from_attributes=True) for l in links]}
+    )
+
+
+# ── Signal Patterns ────────────────────────────────────────────────────────
+
+
+@app.get("/api/signal-patterns", response_model=list[SignalPatternOut])
+async def list_signal_patterns(
+    pattern_type: str | None = None,
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    query = select(SignalPattern).order_by(SignalPattern.created_at.desc()).limit(limit)
+    if pattern_type:
+        query = query.where(SignalPattern.pattern_type == pattern_type)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.get("/api/signal-patterns/{pattern_id}", response_model=SignalPatternOut)
+async def get_signal_pattern(
+    pattern_id: int,
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    result = await db.execute(
+        select(SignalPattern).where(SignalPattern.id == pattern_id)
+    )
+    pattern = result.scalar_one_or_none()
+    if not pattern:
+        raise HTTPException(status_code=404, detail="Signal pattern not found")
+    return pattern
 
 
 # ── Static files ────────────────────────────────────────────────────────────
