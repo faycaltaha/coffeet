@@ -1,33 +1,39 @@
 """
 Composite scoring engine — aggregates weak signals into risk scores.
 
-The key insight: one signal is noise, multiple signals from different
-categories pointing at the same region/sector = convergence = something
-is brewing. This is how intelligence analysts think.
+Sprint 4: category weights derived from CorrelationResult records (avg |r|)
+instead of hardcoded guesses. Falls back to CATEGORY_WEIGHTS from config when
+no correlation data exists (fresh deployment or first run).
+
+Formula:
+  weight  = avg|r| from CorrelationResult for that category, else config default
+  recency = exp(-λ * age_hours)  [half-life 12 hours]
+  base    = sum(severity * weight * recency)
+  score   = min(100, base * 10 * (1 + (n_unique_categories - 1) * CONVERGENCE_FACTOR))
 """
 from __future__ import annotations
 
 import json
 import logging
+import math
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import CATEGORY_WEIGHTS, RECENCY_BANDS
-from .models import RegionScore, SectorScore, Signal
+from .config import CATEGORY_WEIGHTS
+from .models import CorrelationResult, RegionScore, SectorScore, Signal
 
 logger = logging.getLogger(__name__)
 
+RECENCY_LAMBDA: float = math.log(2) / 12.0  # half-life 12 hours
+CONVERGENCE_FACTOR: float = 0.15             # +15% per additional unique category
 
-def _recency_multiplier(signal_time: datetime, now: datetime) -> float:
-    """More recent signals get higher weight."""
-    age_hours = (now - signal_time).total_seconds() / 3600
-    for max_hours, multiplier in RECENCY_BANDS:
-        if age_hours <= max_hours:
-            return multiplier
-    return 0.5
+
+def _recency_decay(age_hours: float) -> float:
+    """Exponential decay by signal age. Returns 1.0 at age 0, 0.5 at 12h, 0.25 at 24h."""
+    return math.exp(-RECENCY_LAMBDA * max(0.0, age_hours))
 
 
 def _compute_trend(current: float, previous: float | None) -> str:
@@ -70,6 +76,21 @@ async def _get_previous_scores(
     return {row[0]: row[1] for row in result.all()}
 
 
+async def _load_correlation_weights(db: AsyncSession) -> dict[str, float]:
+    """
+    Average |r| per signal category from stored CorrelationResult records.
+    Higher correlation → higher weight for that category's signals.
+    Returns {} when no correlations have been computed yet.
+    """
+    result = await db.execute(
+        select(
+            CorrelationResult.signal_category,
+            func.avg(func.abs(CorrelationResult.correlation_coefficient)),
+        ).group_by(CorrelationResult.signal_category)
+    )
+    return {row[0]: float(row[1]) for row in result.all()}
+
+
 async def compute_scores(db: AsyncSession) -> None:
     """Main scoring function — called hourly by scheduler."""
     now = datetime.now(timezone.utc)
@@ -83,6 +104,12 @@ async def compute_scores(db: AsyncSession) -> None:
     if not signals:
         logger.info("No signals in 24h window, skipping scoring")
         return
+
+    correlation_weights = await _load_correlation_weights(db)
+    if correlation_weights:
+        logger.debug("Evidence-based weights loaded for %d categories", len(correlation_weights))
+    else:
+        logger.debug("No correlation data yet; falling back to config defaults")
 
     by_region: dict[str, list[Signal]] = defaultdict(list)
     by_sector: dict[str, list[Signal]] = defaultdict(list)
@@ -101,43 +128,29 @@ async def compute_scores(db: AsyncSession) -> None:
     )
 
     for region, region_signals in by_region.items():
-        score = _compute_composite(region_signals, now)
+        score = _compute_composite(region_signals, now, correlation_weights)
         trend = _compute_trend(score, prev_region.get(region))
-
         top = sorted(region_signals, key=lambda s: s.severity, reverse=True)[:5]
         top_json = json.dumps([
-            {"id": s.id, "title": s.title, "severity": s.severity}
-            for s in top
+            {"id": s.id, "title": s.title, "severity": s.severity} for s in top
         ])
-
         db.add(RegionScore(
-            region=region,
-            score=score,
-            signal_count=len(region_signals),
-            top_signals_json=top_json,
-            trend=trend,
-            period_start=window_start,
-            period_end=now,
+            region=region, score=score, signal_count=len(region_signals),
+            top_signals_json=top_json, trend=trend,
+            period_start=window_start, period_end=now,
         ))
 
     for sector, sector_signals in by_sector.items():
-        score = _compute_composite(sector_signals, now)
+        score = _compute_composite(sector_signals, now, correlation_weights)
         trend = _compute_trend(score, prev_sector.get(sector))
-
         top = sorted(sector_signals, key=lambda s: s.severity, reverse=True)[:5]
         top_json = json.dumps([
-            {"id": s.id, "title": s.title, "severity": s.severity}
-            for s in top
+            {"id": s.id, "title": s.title, "severity": s.severity} for s in top
         ])
-
         db.add(SectorScore(
-            sector=sector,
-            score=score,
-            signal_count=len(sector_signals),
-            top_signals_json=top_json,
-            trend=trend,
-            period_start=window_start,
-            period_end=now,
+            sector=sector, score=score, signal_count=len(sector_signals),
+            top_signals_json=top_json, trend=trend,
+            period_start=window_start, period_end=now,
         ))
 
     await db.commit()
@@ -148,25 +161,33 @@ async def compute_scores(db: AsyncSession) -> None:
     )
 
 
-def _compute_composite(signals: list[Signal], now: datetime) -> float:
+def _compute_composite(
+    signals: list[Signal],
+    now: datetime,
+    correlation_weights: dict[str, float] | None = None,
+) -> float:
     """
-    Composite score formula:
-      base = sum(severity * category_weight * recency_multiplier)
-      convergence_bonus = min(20, signal_count * 3)
-      diversity_bonus = unique_categories * 5
-      final = min(100, normalized)
+    Evidence-based composite score:
+      weight  = avg|r| from CorrelationResult if available, else CATEGORY_WEIGHTS
+      recency = exp(-λ * age_hours)
+      base    = sum(severity * weight * recency)
+      score   = min(100, base * 10 * convergence_multiplier)
     """
+    if not signals:
+        return 0.0
+
+    weights = correlation_weights or {}
     base_score = 0.0
     categories_seen: set[str] = set()
 
     for sig in signals:
-        weight = CATEGORY_WEIGHTS.get(sig.category, 0.8)
-        recency = _recency_multiplier(sig.signal_time, now)
-        base_score += sig.severity * weight * recency
+        weight = weights.get(sig.category) or CATEGORY_WEIGHTS.get(sig.category, 0.8)
+        st = sig.signal_time
+        if st.tzinfo is None:
+            st = st.replace(tzinfo=timezone.utc)
+        age_hours = (now - st).total_seconds() / 3600
+        base_score += sig.severity * weight * _recency_decay(age_hours)
         categories_seen.add(sig.category)
 
-    convergence_bonus = min(20, len(signals) * 3)
-    diversity_bonus = len(categories_seen) * 5
-
-    raw = base_score * 10 + convergence_bonus + diversity_bonus
-    return min(100.0, max(0.0, raw))
+    convergence_mult = 1.0 + max(0, len(categories_seen) - 1) * CONVERGENCE_FACTOR
+    return min(100.0, max(0.0, base_score * 10.0 * convergence_mult))

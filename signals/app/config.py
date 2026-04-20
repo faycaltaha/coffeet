@@ -45,13 +45,6 @@ REGION_ALERT_HIGH: float = float(os.environ.get("REGION_ALERT_HIGH", "60"))
 REGION_ALERT_CRITICAL: float = float(os.environ.get("REGION_ALERT_CRITICAL", "80"))
 SECTOR_SPIKE_THRESHOLD: float = float(os.environ.get("SECTOR_SPIKE_THRESHOLD", "20"))
 
-# ── Recency weights (hours, multiplier) ─────────────────────────────────────
-RECENCY_BANDS: list[tuple[int, float]] = [
-    (4, 1.5),
-    (12, 1.2),
-    (24, 1.0),
-]
-
 # ── GDELT keyword sets ──────────────────────────────────────────────────────
 # Weak signals first (precursors), then escalation terms.
 GDELT_KEYWORDS: list[str] = [
