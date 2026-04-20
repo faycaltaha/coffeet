@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 
 from .alerts import evaluate_alerts
+from .correlation import compute_correlations
 from .collectors.acled import ACLEDCollector
 from .collectors.ais import AISCollector
 from .collectors.comtrade import ComtradeCollector
@@ -68,3 +69,13 @@ async def run_scoring_and_alerts() -> None:
             logger.info("Scoring complete, %d alerts created", alert_count)
     except Exception as exc:
         logger.error("Scoring/alerts failed: %s", exc)
+
+
+async def run_correlation_analysis() -> None:
+    """Run correlation analysis over all (crisis, signal_category) pairs."""
+    try:
+        async with SessionLocal() as db:
+            count = await compute_correlations(db)
+            logger.info("Correlation analysis complete: %d results stored", count)
+    except Exception as exc:
+        logger.error("Correlation analysis failed: %s", exc)

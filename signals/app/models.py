@@ -179,3 +179,23 @@ class CrisisSignalLink(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
+
+
+class CorrelationResult(Base):
+    __tablename__ = "correlation_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    signal_category: Mapped[str] = mapped_column(String(50), nullable=False)
+    crisis_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    region: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    lag_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    correlation_coefficient: Mapped[float] = mapped_column(Float, nullable=False)
+    p_value: Mapped[float] = mapped_column(Float, nullable=False)
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    __table_args__ = (
+        Index("ix_corr_category_crisis", "signal_category", "crisis_type"),
+    )

@@ -17,9 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import SIGNAL_API_KEY
 from .database import get_db, init_db
+from .correlation import detect_active_patterns
 from .models import (
     Alert,
     CollectorStatus,
+    CorrelationResult,
     Crisis,
     CrisisSignalLink,
     RegionScore,
@@ -30,10 +32,12 @@ from .models import (
 from .schemas import (
     AlertOut,
     CollectorStatusOut,
+    CorrelationResultOut,
     CrisisDetail,
     CrisisOut,
     CrisisSignalLinkOut,
     OverviewOut,
+    PatternMatchOut,
     RegionScoreOut,
     ScoreHistory,
     SectorScoreOut,
@@ -41,7 +45,7 @@ from .schemas import (
     SignalOut,
     SignalPatternOut,
 )
-from .scheduler import run_collector, run_scoring_and_alerts
+from .scheduler import run_collector, run_correlation_analysis, run_scoring_and_alerts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -68,6 +72,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(run_collector, "interval", args=["comtrade"], hours=12, id="comtrade")
     scheduler.add_job(run_collector, "interval", args=["imf"], hours=12, id="imf")
     scheduler.add_job(run_scoring_and_alerts, "interval", hours=1, id="scoring")
+    scheduler.add_job(run_correlation_analysis, "interval", hours=24, id="correlation")
 
     scheduler.start()
     logger.info("Signal Monitor started — 14 collectors + scoring engine")
@@ -409,6 +414,41 @@ async def get_signal_pattern(
     if not pattern:
         raise HTTPException(status_code=404, detail="Signal pattern not found")
     return pattern
+
+
+# ── Correlations ───────────────────────────────────────────────────────────
+
+
+@app.get("/api/correlations", response_model=list[CorrelationResultOut])
+async def list_correlations(
+    signal_category: str | None = None,
+    crisis_type: str | None = None,
+    min_correlation: float = Query(default=0.25, ge=0.0, le=1.0),
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    query = (
+        select(CorrelationResult)
+        .order_by(CorrelationResult.correlation_coefficient.desc())
+        .limit(limit)
+    )
+    if signal_category:
+        query = query.where(CorrelationResult.signal_category == signal_category)
+    if crisis_type:
+        query = query.where(CorrelationResult.crisis_type == crisis_type)
+    result = await db.execute(query)
+    rows = result.scalars().all()
+    return [r for r in rows if abs(r.correlation_coefficient) >= min_correlation]
+
+
+@app.get("/api/correlations/active-patterns", response_model=list[PatternMatchOut])
+async def active_patterns(
+    region: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    return await detect_active_patterns(db, region=region)
 
 
 # ── Static files ────────────────────────────────────────────────────────────

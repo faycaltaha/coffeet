@@ -141,3 +141,28 @@ class CrisisDetail(CrisisOut):
     links: list[CrisisSignalLinkOut] = []
 
     model_config = {"from_attributes": True}
+
+
+class CorrelationResultOut(BaseModel):
+    id: int
+    signal_category: str
+    crisis_type: str
+    region: str | None
+    lag_days: int
+    correlation_coefficient: float
+    p_value: float
+    sample_size: int
+    computed_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PatternMatchOut(BaseModel):
+    signal_category: str
+    crisis_type: str
+    region: str | None
+    lag_days: int
+    correlation: float
+    z_score: float
+    risk_level: str
+    description: str
