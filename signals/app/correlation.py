@@ -67,11 +67,17 @@ def _daily_severity_bins(
     """
     Average signal severity per calendar day over [start, end].
     Days with no signals get 0.0.
+    Normalizes to naive datetimes so SQLite (strips tz) and PostgreSQL
+    (preserves tz) both work.
     """
-    days = max(1, (end - start).days + 1)
+    start_n = start.replace(tzinfo=None) if start.tzinfo else start
+    end_n = end.replace(tzinfo=None) if end.tzinfo else end
+    days = max(1, (end_n - start_n).days + 1)
     bins: dict[int, list[float]] = defaultdict(list)
     for sig in signals:
-        idx = (sig.signal_time - start).days
+        st = sig.signal_time
+        st_n = st.replace(tzinfo=None) if st.tzinfo else st
+        idx = (st_n - start_n).days
         if 0 <= idx < days:
             bins[idx].append(sig.severity)
     return [mean(bins[i]) if i in bins else 0.0 for i in range(days)]
