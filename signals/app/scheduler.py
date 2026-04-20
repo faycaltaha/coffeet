@@ -6,11 +6,19 @@ from __future__ import annotations
 import logging
 
 from .alerts import evaluate_alerts
+from .collectors.acled import ACLEDCollector
+from .collectors.ais import AISCollector
+from .collectors.comtrade import ComtradeCollector
 from .collectors.eia import EIACollector
 from .collectors.fred import FREDCollector
 from .collectors.gdelt import GDELTCollector
+from .collectors.imf import IMFCollector
+from .collectors.noaa import NOAACollector
+from .collectors.opensanctions import OpenSanctionsCollector
+from .collectors.reliefweb import ReliefWebCollector
 from .collectors.rss_news import RSSCollector
 from .collectors.usgs import USGSCollector
+from .collectors.wikipedia import WikipediaCollector
 from .collectors.yfinance_collector import YFinanceCollector
 from .database import SessionLocal
 from .scoring import compute_scores
@@ -24,6 +32,14 @@ COLLECTORS = {
     "eia": EIACollector,
     "rss": RSSCollector,
     "yfinance": YFinanceCollector,
+    "noaa": NOAACollector,
+    "reliefweb": ReliefWebCollector,
+    "wikipedia": WikipediaCollector,
+    "opensanctions": OpenSanctionsCollector,
+    "comtrade": ComtradeCollector,
+    "imf": IMFCollector,
+    "acled": ACLEDCollector,
+    "ais": AISCollector,
 }
 
 

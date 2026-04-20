@@ -56,13 +56,21 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(run_collector, "interval", args=["rss"], minutes=20, id="rss")
     scheduler.add_job(run_collector, "interval", args=["gdelt"], minutes=30, id="gdelt")
     scheduler.add_job(run_collector, "interval", args=["usgs"], minutes=60, id="usgs")
+    scheduler.add_job(run_collector, "interval", args=["noaa"], minutes=60, id="noaa")
+    scheduler.add_job(run_collector, "interval", args=["reliefweb"], minutes=60, id="reliefweb")
+    scheduler.add_job(run_collector, "interval", args=["wikipedia"], hours=2, id="wikipedia")
     scheduler.add_job(run_collector, "interval", args=["yfinance"], hours=2, id="yfinance")
+    scheduler.add_job(run_collector, "interval", args=["ais"], hours=4, id="ais")
     scheduler.add_job(run_collector, "interval", args=["eia"], hours=4, id="eia")
     scheduler.add_job(run_collector, "interval", args=["fred"], hours=6, id="fred")
+    scheduler.add_job(run_collector, "interval", args=["opensanctions"], hours=6, id="opensanctions")
+    scheduler.add_job(run_collector, "interval", args=["acled"], hours=6, id="acled")
+    scheduler.add_job(run_collector, "interval", args=["comtrade"], hours=12, id="comtrade")
+    scheduler.add_job(run_collector, "interval", args=["imf"], hours=12, id="imf")
     scheduler.add_job(run_scoring_and_alerts, "interval", hours=1, id="scoring")
 
     scheduler.start()
-    logger.info("Signal Monitor started — 6 collectors + scoring engine")
+    logger.info("Signal Monitor started — 14 collectors + scoring engine")
     yield
     scheduler.shutdown()
 

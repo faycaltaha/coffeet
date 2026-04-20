@@ -18,6 +18,9 @@ DATABASE_URL: str = os.environ.get(
 # ── External API keys ───────────────────────────────────────────────────────
 FRED_API_KEY: str = os.environ.get("FRED_API_KEY", "")
 EIA_API_KEY: str = os.environ.get("EIA_API_KEY", "")
+ACLED_API_KEY: str = os.environ.get("ACLED_API_KEY", "")
+ACLED_EMAIL: str = os.environ.get("ACLED_EMAIL", "")
+COMTRADE_API_KEY: str = os.environ.get("COMTRADE_API_KEY", "")
 
 # ── Signal API auth ─────────────────────────────────────────────────────────
 SIGNAL_API_KEY: str = os.environ.get("SIGNAL_API_KEY", "")
@@ -26,10 +29,15 @@ SIGNAL_API_KEY: str = os.environ.get("SIGNAL_API_KEY", "")
 CATEGORY_WEIGHTS: dict[str, float] = {
     "seismic": 1.5,
     "geopolitical": 1.3,
+    "conflict": 1.3,
     "energy": 1.2,
+    "humanitarian": 1.1,
     "economic": 1.0,
+    "trade": 1.0,
     "financial": 0.9,
+    "climate": 0.9,
     "news": 0.8,
+    "osint": 0.7,
 }
 
 # ── Alert thresholds ────────────────────────────────────────────────────────
