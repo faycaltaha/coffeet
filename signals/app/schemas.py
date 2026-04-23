@@ -166,3 +166,35 @@ class PatternMatchOut(BaseModel):
     z_score: float
     risk_level: str
     description: str
+
+class RiskAssessmentOut(BaseModel):
+    id: int
+    region: str
+    crisis_type: str
+    risk_score: float
+    confidence_low: float
+    confidence_high: float
+    p_7d: float
+    p_30d: float
+    p_90d: float
+    alert_tier: str
+    top_drivers_json: str | None
+    historical_analog_json: str | None
+    computed_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class RiskAssessmentDetail(BaseModel):
+    region: str
+    crisis_type: str
+    risk_score: float
+    confidence_low: float
+    confidence_high: float
+    p_7d: float
+    p_30d: float
+    p_90d: float
+    alert_tier: str
+    top_drivers: list[dict] | None = None
+    historical_analogs: list[dict] | None = None
+    description: str
+

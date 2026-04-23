@@ -7,7 +7,6 @@ import pytest
 
 from app.collectors.noaa import _alert_severity, _classify_sector
 from app.collectors.reliefweb import _extract_country, _status_to_severity
-from app.collectors.wikipedia import _edit_count_to_severity
 from app.collectors.opensanctions import _entity_to_region, _schema_to_severity
 from app.collectors.comtrade import _trade_change_severity
 from app.collectors.imf import _debt_to_severity
@@ -102,38 +101,6 @@ class TestReliefWebExtractCountry:
 
     def test_non_list(self):
         assert _extract_country({"country": "Nepal"}) is None
-
-
-# ── Wikipedia ────────────────────────────────────────────────────────────────
-
-
-class TestWikipediaEditSeverity:
-    def test_massive_spike(self):
-        assert _edit_count_to_severity(60) == 1.0
-
-    def test_large_spike(self):
-        assert _edit_count_to_severity(35) == 0.8
-
-    def test_moderate_spike(self):
-        assert _edit_count_to_severity(25) == 0.6
-
-    def test_small_spike(self):
-        assert _edit_count_to_severity(12) == 0.4
-
-    def test_minimal_activity(self):
-        assert _edit_count_to_severity(7) == 0.2
-
-    def test_boundary_50(self):
-        assert _edit_count_to_severity(50) == 1.0
-
-    def test_boundary_30(self):
-        assert _edit_count_to_severity(30) == 0.8
-
-    def test_no_activity(self):
-        assert _edit_count_to_severity(3) == 0.0
-
-    def test_zero(self):
-        assert _edit_count_to_severity(0) == 0.0
 
 
 # ── OpenSanctions ────────────────────────────────────────────────────────────

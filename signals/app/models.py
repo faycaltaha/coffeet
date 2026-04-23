@@ -199,3 +199,27 @@ class CorrelationResult(Base):
     __table_args__ = (
         Index("ix_corr_category_crisis", "signal_category", "crisis_type"),
     )
+
+class RiskAssessment(Base):
+    __tablename__ = "risk_assessments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    region: Mapped[str] = mapped_column(String(100), nullable=False)
+    crisis_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence_low: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence_high: Mapped[float] = mapped_column(Float, nullable=False)
+    p_7d: Mapped[float] = mapped_column(Float, nullable=False)
+    p_30d: Mapped[float] = mapped_column(Float, nullable=False)
+    p_90d: Mapped[float] = mapped_column(Float, nullable=False)
+    alert_tier: Mapped[str] = mapped_column(String(20), nullable=False)
+    top_drivers_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    historical_analog_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    __table_args__ = (
+        Index("ix_risk_region_crisis", "region", "crisis_type"),
+    )
+

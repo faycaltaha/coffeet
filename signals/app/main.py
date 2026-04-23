@@ -27,6 +27,7 @@ from .models import (
     RegionScore,
     SectorScore,
     Signal,
+    RiskAssessment,
     SignalPattern,
 )
 from .schemas import (
@@ -43,9 +44,11 @@ from .schemas import (
     SectorScoreOut,
     SignalDetail,
     SignalOut,
+    RiskAssessmentDetail,
+    RiskAssessmentOut,
     SignalPatternOut,
 )
-from .scheduler import run_collector, run_correlation_analysis, run_scoring_and_alerts
+from .scheduler import run_collector, run_correlation_analysis, run_risk_assessment, run_scoring_and_alerts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,7 +65,6 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(run_collector, "interval", args=["usgs"], minutes=60, id="usgs")
     scheduler.add_job(run_collector, "interval", args=["noaa"], minutes=60, id="noaa")
     scheduler.add_job(run_collector, "interval", args=["reliefweb"], minutes=60, id="reliefweb")
-    scheduler.add_job(run_collector, "interval", args=["wikipedia"], hours=2, id="wikipedia")
     scheduler.add_job(run_collector, "interval", args=["yfinance"], hours=2, id="yfinance")
     scheduler.add_job(run_collector, "interval", args=["ais"], hours=4, id="ais")
     scheduler.add_job(run_collector, "interval", args=["eia"], hours=4, id="eia")
@@ -73,9 +75,10 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(run_collector, "interval", args=["imf"], hours=12, id="imf")
     scheduler.add_job(run_scoring_and_alerts, "interval", hours=1, id="scoring")
     scheduler.add_job(run_correlation_analysis, "interval", hours=24, id="correlation")
+    scheduler.add_job(run_risk_assessment, "interval", hours=4, id="risk_assessment")
 
     scheduler.start()
-    logger.info("Signal Monitor started — 14 collectors + scoring engine")
+    logger.info("Signal Monitor started — 13 collectors + scoring + correlation + risk assessment")
     yield
     scheduler.shutdown()
 
@@ -449,6 +452,75 @@ async def active_patterns(
     _auth: None = Depends(verify_api_key),
 ):
     return await detect_active_patterns(db, region=region)
+
+
+# ── Risk Assessments ───────────────────────────────────────────────────
+
+
+@app.get("/api/risk-assessments", response_model=list[RiskAssessmentOut])
+async def list_risk_assessments(
+    region: str | None = None,
+    crisis_type: str | None = None,
+    min_score: float = Query(default=0.0, ge=0.0, le=100.0),
+    limit: int = Query(default=50, le=200),
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    query = (
+        select(RiskAssessment)
+        .order_by(RiskAssessment.risk_score.desc())
+        .limit(limit)
+    )
+    if region:
+        query = query.where(RiskAssessment.region == region)
+    if crisis_type:
+        query = query.where(RiskAssessment.crisis_type == crisis_type)
+    result = await db.execute(query)
+    rows = result.scalars().all()
+    return [r for r in rows if r.risk_score >= min_score]
+
+
+@app.get("/api/risk-assessments/{region}", response_model=list[RiskAssessmentDetail])
+async def get_region_risk(
+    region: str,
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    latest = await db.execute(select(func.max(RiskAssessment.computed_at)))
+    latest_time = latest.scalar()
+    if not latest_time:
+        return []
+    result = await db.execute(
+        select(RiskAssessment).where(
+            and_(
+                RiskAssessment.region == region,
+                RiskAssessment.computed_at == latest_time,
+            )
+        ).order_by(RiskAssessment.risk_score.desc())
+    )
+    rows = result.scalars().all()
+    import json as _json
+    return [
+        RiskAssessmentDetail(
+            region=r.region,
+            crisis_type=r.crisis_type,
+            risk_score=r.risk_score,
+            confidence_low=r.confidence_low,
+            confidence_high=r.confidence_high,
+            p_7d=r.p_7d,
+            p_30d=r.p_30d,
+            p_90d=r.p_90d,
+            alert_tier=r.alert_tier,
+            top_drivers=_json.loads(r.top_drivers_json) if r.top_drivers_json else None,
+            historical_analogs=_json.loads(r.historical_analog_json) if r.historical_analog_json else None,
+            description=(
+                f"{r.region}: {r.risk_score:.0f}/100 risk of {r.crisis_type} "
+                f"(P30d={r.p_30d:.0%}, P90d={r.p_90d:.0%}). "
+                f"Alert tier: {r.alert_tier}."
+            ),
+        )
+        for r in rows
+    ]
 
 
 # ── Static files ────────────────────────────────────────────────────────────
