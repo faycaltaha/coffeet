@@ -4,6 +4,22 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .database import Base
 
 
+class VideoRun(Base):
+    """Tracks one daily execution of the Marcel video generation pipeline."""
+
+    __tablename__ = "video_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # "running" | "done" | "failed"
+    status: Mapped[str] = mapped_column(String(20), default="running")
+    car_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    script: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    video_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class User(Base):
     __tablename__ = "users"
 

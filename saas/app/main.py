@@ -2,6 +2,7 @@ import json
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 import stripe
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -21,8 +22,10 @@ from .auth import (
     verify_password,
 )
 from .database import get_db, init_db
-from .models import ScanRun, User
+from .models import ScanRun, User, VideoRun
 from .scraper import run_scan
+
+_AUDIO_DIR = os.environ.get("VIDEO_AUDIO_DIR", "/tmp/autoradar/audio")
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -50,10 +53,25 @@ async def daily_scan_job():
         print(f"[scheduler] scan failed: {e}")
 
 
+async def daily_video_job():
+    """Runs every day at 08:00 to produce Marcel's video."""
+    from .database import SessionLocal
+    from .video_pipeline.pipeline import run_video_pipeline
+
+    try:
+        async with SessionLocal() as db:
+            await run_video_pipeline(db)
+    except Exception as e:
+        print(f"[scheduler] video pipeline failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Ensure audio output directory exists so StaticFiles mount succeeds.
+    Path(_AUDIO_DIR).mkdir(parents=True, exist_ok=True)
     scheduler.add_job(daily_scan_job, "cron", hour=7, minute=0)
+    scheduler.add_job(daily_video_job, "cron", hour=8, minute=0)
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -258,7 +276,59 @@ async def scan_status(db: AsyncSession = Depends(get_db)):
     return {"last_scan": scan.run_at.isoformat(), "count": scan.listing_count}
 
 
+# ─── Video Pipeline API ──────────────────────────────────────────────────────
+
+
+@app.get("/api/videos")
+async def list_video_runs(
+    limit: int = 10,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the most recent video pipeline runs (admin convenience)."""
+    result = await db.execute(
+        select(VideoRun).order_by(VideoRun.run_at.desc()).limit(limit)
+    )
+    runs = result.scalars().all()
+    return {
+        "runs": [
+            {
+                "id": r.id,
+                "run_at": r.run_at.isoformat(),
+                "status": r.status,
+                "car_title": r.car_title,
+                "video_url": r.video_url,
+                "error_message": r.error_message,
+            }
+            for r in runs
+        ]
+    }
+
+
+@app.post("/api/videos/trigger")
+async def trigger_video_pipeline(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger the video pipeline (admin use only)."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    import asyncio
+    from .video_pipeline.pipeline import run_video_pipeline
+
+    asyncio.create_task(run_video_pipeline(db))
+    return {"ok": True, "message": "Video pipeline triggered in background."}
+
+
 # ─── Static files / SPA ──────────────────────────────────────────────────────
+
+# Serve generated audio files so Shotstack can fetch them.
+app.mount(
+    "/media/audio",
+    StaticFiles(directory=_AUDIO_DIR),
+    name="media_audio",
+)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 

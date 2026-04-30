@@ -11,3 +11,8 @@ python-dotenv==1.0.1
 apscheduler==3.10.4
 python-multipart==0.0.20
 email-validator==2.2.0
+# ── Video pipeline ─────────────────────────────────────────────────────────
+anthropic==0.50.0
+pytest==8.3.5
+pytest-asyncio==0.24.0
+pytest-mock==3.14.0
