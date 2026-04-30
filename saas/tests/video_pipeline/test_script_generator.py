@@ -70,6 +70,15 @@ def test_pick_signature_unknown_mode_falls_back_to_roast():
     assert sig in MARCEL_SIGNATURES["ROAST"]
 
 
+def test_all_signatures_end_with_autoradar():
+    """Every phrase in every pool must close with 'Autoradar' for brand consistency."""
+    for mode, pool in MARCEL_SIGNATURES.items():
+        for phrase in pool:
+            assert phrase.endswith("Autoradar."), (
+                f"{mode} phrase does not end with 'Autoradar.': {phrase!r}"
+            )
+
+
 def test_pick_signature_all_pool_entries_reachable():
     """Every phrase in each pool must be reachable within a reasonable range of dates."""
     from datetime import timedelta
@@ -89,7 +98,7 @@ def test_pick_signature_all_pool_entries_reachable():
 
 # ── _build_user_message ───────────────────────────────────────────────────────
 
-_SIG = "Les données ne mentent jamais."
+_SIG = "C'est beau. C'est rare. C'est Autoradar."
 
 
 def test_build_user_message_contains_car_info():

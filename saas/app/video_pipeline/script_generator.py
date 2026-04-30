@@ -23,20 +23,20 @@ logger = logging.getLogger(__name__)
 # ROAST phrases are brutal warnings; DIAMOND phrases are triumphant / exclusive.
 MARCEL_SIGNATURES: dict[str, list[str]] = {
     "ROAST": [
-        "Ne dites pas que je ne vous avais pas prévenu.",
-        "Les données ne mentent pas. Les vendeurs, si.",
-        "Marcel a parlé. Le reste, c'est votre problème.",
-        "C'est signé Marcel. Vous êtes prévenus.",
-        "Autoradar vous a dit la vérité. À vous de jouer.",
-        "Si vous achetez ça quand même, bonne chance.",
+        "Ne dites pas que je ne vous avais pas prévenu. C'est Autoradar.",
+        "Les vendeurs mentent. Les chiffres, jamais. C'est Autoradar.",
+        "Marcel a vu. Marcel a jugé. Faites confiance à Autoradar.",
+        "La data ne ment pas. Vous avez été prévenus. Signé Autoradar.",
+        "Achetez malin ou achetez deux fois. Le choix s'appelle Autoradar.",
+        "Marcel parle. Les données confirment. Bienvenue sur Autoradar.",
     ],
     "DIAMOND": [
-        "Les données ne mentent jamais.",
-        "Ce deal, je l'ai trouvé. Ce que vous en faites, c'est votre affaire.",
-        "Quand les chiffres parlent, les opinions se taisent.",
-        "Signé Marcel. Vous pouvez me remercier plus tard.",
-        "C'est rare. C'est beau. C'est Autoradar.",
-        "Vous pouvez chercher. Autoradar a déjà trouvé.",
+        "C'est beau. C'est rare. C'est Autoradar.",
+        "Ce deal existait. Vous ne le saviez pas. Il s'appelle Autoradar.",
+        "Les bonnes affaires ne s'inventent pas. Elles se calculent. C'est Autoradar.",
+        "Vous cherchez encore. Marcel a déjà trouvé. C'est Autoradar.",
+        "Signé Marcel. Validé par les données. Certifié Autoradar.",
+        "Les bonnes affaires existent. Il faut juste les voir. C'est Autoradar.",
     ],
 }
 
