@@ -16,6 +16,15 @@ _CAR = CarOfTheDay(
     title="Volkswagen Golf 2018", fuel="diesel", estimated_profit=2_500,
 )
 
+_CAR_ROAST = CarOfTheDay(
+    make="Fiat", model="Stilo", year=2005, mileage_km=200_000,
+    price_eur=6_000, reliability_score=15.0, price_score=80.0,
+    overall_score=10.0, image_url="", ad_url="", title="Fiat Stilo 2005",
+    fuel="essence", estimated_profit=0,
+    mode="ROAST", score_gap=65.0,
+    comparison_summary="2020 Toyota Yaris – score Autoradar 88/100 – 9 500 €",
+)
+
 
 # ── _build_user_message ───────────────────────────────────────────────────────
 
@@ -41,7 +50,34 @@ def test_build_user_message_zero_profit():
         fuel="essence", estimated_profit=0,
     )
     msg = _build_user_message(car_no_profit)
-    assert "inconnu" in msg
+    assert "négatif" in msg
+
+
+def test_build_user_message_diamond_mode():
+    msg = _build_user_message(_CAR)
+    assert "DIAMOND" in msg
+    assert "alternative" not in msg.lower()
+    assert "Écart" not in msg
+
+
+def test_build_user_message_roast_includes_comparison():
+    msg = _build_user_message(_CAR_ROAST)
+    assert "ROAST" in msg
+    assert "Toyota" in msg          # from comparison_summary
+    assert "65" in msg              # score_gap
+
+
+def test_build_user_message_roast_no_comparison_when_empty():
+    car = CarOfTheDay(
+        make="Alfa", model="Romeo", year=2008, mileage_km=180_000,
+        price_eur=5_000, reliability_score=10.0, price_score=70.0,
+        overall_score=5.0, image_url="", ad_url="", title="Alfa Romeo",
+        fuel="essence", estimated_profit=0,
+        mode="ROAST", score_gap=60.0, comparison_summary="",
+    )
+    msg = _build_user_message(car)
+    assert "ROAST" in msg
+    assert "alternative Autoradar" not in msg
 
 
 # ── generate_script ───────────────────────────────────────────────────────────
@@ -113,3 +149,6 @@ def test_generate_script_system_prompt_in_call(monkeypatch):
     call_kwargs = mock_client.messages.create.call_args.kwargs
     assert "Marcel" in call_kwargs["system"]
     assert "Autoradar" in call_kwargs["system"]
+    assert "LA CLAQUE" in call_kwargs["system"]
+    assert "LA SORTIE" in call_kwargs["system"]
+    assert "5 SEGMENTS" in call_kwargs["system"]
