@@ -5,8 +5,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from datetime import date
+
 from app.video_pipeline.car_selector import CarOfTheDay
-from app.video_pipeline.script_generator import _build_user_message, generate_script
+from app.video_pipeline.script_generator import (
+    MARCEL_SIGNATURES,
+    _build_user_message,
+    generate_script,
+    pick_signature,
+)
 
 _CAR = CarOfTheDay(
     make="Volkswagen", model="Golf", year=2018, mileage_km=78_000,
@@ -26,10 +33,67 @@ _CAR_ROAST = CarOfTheDay(
 )
 
 
+# ── pick_signature ────────────────────────────────────────────────────────────
+
+def test_pick_signature_returns_string_from_pool():
+    sig = pick_signature(_CAR)
+    assert sig in MARCEL_SIGNATURES["DIAMOND"]
+
+
+def test_pick_signature_roast_uses_roast_pool():
+    sig = pick_signature(_CAR_ROAST)
+    assert sig in MARCEL_SIGNATURES["ROAST"]
+
+
+def test_pick_signature_deterministic_same_day():
+    d = date(2026, 5, 1)
+    assert pick_signature(_CAR, today=d) == pick_signature(_CAR, today=d)
+
+
+def test_pick_signature_varies_by_day():
+    d1 = date(2026, 5, 1)
+    d2 = date(2026, 5, 2)
+    # Different days must not always give the same phrase (they differ for this car).
+    results = {pick_signature(_CAR, today=d1), pick_signature(_CAR, today=d2)}
+    # At least one of the two days should yield a valid pool member — both always will.
+    assert all(s in MARCEL_SIGNATURES["DIAMOND"] for s in results)
+
+
+def test_pick_signature_unknown_mode_falls_back_to_roast():
+    car = CarOfTheDay(
+        make="X", model="Y", year=2020, mileage_km=0, price_eur=0,
+        reliability_score=0.0, price_score=0.0, overall_score=0.0,
+        image_url="", ad_url="", title="X Y 2020", fuel="",
+        estimated_profit=0, mode="UNKNOWN",
+    )
+    sig = pick_signature(car, today=date(2026, 5, 1))
+    assert sig in MARCEL_SIGNATURES["ROAST"]
+
+
+def test_pick_signature_all_pool_entries_reachable():
+    """Every phrase in each pool must be reachable within a reasonable range of dates."""
+    from datetime import timedelta
+    for mode, pool in MARCEL_SIGNATURES.items():
+        car = CarOfTheDay(
+            make="T", model="T", year=2020, mileage_km=0, price_eur=0,
+            reliability_score=0.0, price_score=0.0, overall_score=0.0,
+            image_url="", ad_url="", title="T T 2020", fuel="",
+            estimated_profit=0, mode=mode,
+        )
+        seen = set()
+        base = date(2026, 1, 1)
+        for i in range(365):
+            seen.add(pick_signature(car, today=base + timedelta(days=i)))
+        assert seen == set(pool), f"Not all {mode} phrases reachable in 365 days"
+
+
 # ── _build_user_message ───────────────────────────────────────────────────────
 
+_SIG = "Les données ne mentent jamais."
+
+
 def test_build_user_message_contains_car_info():
-    msg = _build_user_message(_CAR)
+    msg = _build_user_message(_CAR, _SIG)
     assert "Volkswagen" in msg
     assert "Golf" in msg
     assert "2018" in msg
@@ -38,7 +102,7 @@ def test_build_user_message_contains_car_info():
 
 
 def test_build_user_message_shows_profit():
-    msg = _build_user_message(_CAR)
+    msg = _build_user_message(_CAR, _SIG)
     assert "+2" in msg or "2 500" in msg or "2500" in msg
 
 
@@ -49,19 +113,26 @@ def test_build_user_message_zero_profit():
         overall_score=20.0, image_url="", ad_url="", title="Fiat Panda",
         fuel="essence", estimated_profit=0,
     )
-    msg = _build_user_message(car_no_profit)
+    msg = _build_user_message(car_no_profit, _SIG)
     assert "négatif" in msg
 
 
+def test_build_user_message_embeds_signature():
+    sig = "Ne dites pas que je ne vous avais pas prévenu."
+    msg = _build_user_message(_CAR, sig)
+    assert sig in msg
+    assert "SIGNATURE FINALE OBLIGATOIRE" in msg
+
+
 def test_build_user_message_diamond_mode():
-    msg = _build_user_message(_CAR)
+    msg = _build_user_message(_CAR, _SIG)
     assert "DIAMOND" in msg
     assert "alternative" not in msg.lower()
     assert "Écart" not in msg
 
 
 def test_build_user_message_roast_includes_comparison():
-    msg = _build_user_message(_CAR_ROAST)
+    msg = _build_user_message(_CAR_ROAST, _SIG)
     assert "ROAST" in msg
     assert "Toyota" in msg          # from comparison_summary
     assert "65" in msg              # score_gap
@@ -75,7 +146,7 @@ def test_build_user_message_roast_no_comparison_when_empty():
         fuel="essence", estimated_profit=0,
         mode="ROAST", score_gap=60.0, comparison_summary="",
     )
-    msg = _build_user_message(car)
+    msg = _build_user_message(car, _SIG)
     assert "ROAST" in msg
     assert "alternative Autoradar" not in msg
 
@@ -152,3 +223,7 @@ def test_generate_script_system_prompt_in_call(monkeypatch):
     assert "LA CLAQUE" in call_kwargs["system"]
     assert "LA SORTIE" in call_kwargs["system"]
     assert "5 SEGMENTS" in call_kwargs["system"]
+    assert "LA SIGNATURE" in call_kwargs["system"]
+    # The user message must contain the injected signature phrase.
+    user_content = call_kwargs["messages"][0]["content"]
+    assert "SIGNATURE FINALE OBLIGATOIRE" in user_content
