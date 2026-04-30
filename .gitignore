@@ -1,3 +1,4 @@
 car_database/__pycache__/
 car_database/cars.db
 car_database/scraper.log
+car_database/debug_page*.html
