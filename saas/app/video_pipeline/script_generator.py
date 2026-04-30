@@ -23,20 +23,20 @@ logger = logging.getLogger(__name__)
 # ROAST phrases are brutal warnings; DIAMOND phrases are triumphant / exclusive.
 MARCEL_SIGNATURES: dict[str, list[str]] = {
     "ROAST": [
-        "Ne dites pas que je ne vous avais pas prévenu. C'est Autoradar.",
-        "Les vendeurs mentent. Les chiffres, jamais. C'est Autoradar.",
-        "Marcel a vu. Marcel a jugé. Faites confiance à Autoradar.",
-        "La data ne ment pas. Vous avez été prévenus. Signé Autoradar.",
-        "Achetez malin ou achetez deux fois. Le choix s'appelle Autoradar.",
-        "Marcel parle. Les données confirment. Bienvenue sur Autoradar.",
+        "Ne venez pas pleurer quand elle vous lâchera sur l'autoroute. Moi, j'ai fait mon job. C'est Autoradar.",
+        "Le vendeur sourit, mais mes chiffres font la gueule. La vérité est ailleurs. Bienvenue sur Autoradar.",
+        "Verdict : une ruine sur quatre roues. Votre portefeuille mérite mieux que ça. Signé Autoradar.",
+        "La data n'a pas d'états d'âme, contrairement à votre garagiste. Vous êtes prévenus. C'est Autoradar.",
+        "Acheter ça, c'est du suicide financier. Arrêtez de deviner, commencez à calculer. Autoradar.",
+        "J'analyse, je juge, je condamne. Ne soyez pas la prochaine victime. Autoradar.",
     ],
     "DIAMOND": [
-        "C'est beau. C'est rare. C'est Autoradar.",
-        "Ce deal existait. Vous ne le saviez pas. Il s'appelle Autoradar.",
-        "Les bonnes affaires ne s'inventent pas. Elles se calculent. C'est Autoradar.",
-        "Vous cherchez encore. Marcel a déjà trouvé. C'est Autoradar.",
-        "Signé Marcel. Validé par les données. Certifié Autoradar.",
-        "Les bonnes affaires existent. Il faut juste les voir. C'est Autoradar.",
+        "Une perle rare dans un océan de ferraille. La machine a parlé. C'est Autoradar.",
+        "Pendant que vous hésitez, mon algorithme a déjà validé. Le deal est là. Autoradar.",
+        "La chance, c'est pour les amateurs. La précision, c'est pour vous. Signé Autoradar.",
+        "J'ai scanné, j'ai trouvé, vous n'avez plus qu'à cliquer. Trop facile. Autoradar.",
+        "Mon processeur ne valide presque jamais. Mais là, c'est du lourd. Certifié Autoradar.",
+        "L'affaire du siècle n'attend pas les retardataires. Je l'ai trouvée, à vous de jouer. Autoradar.",
     ],
 }
 

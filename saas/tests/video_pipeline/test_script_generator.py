@@ -98,7 +98,7 @@ def test_pick_signature_all_pool_entries_reachable():
 
 # ── _build_user_message ───────────────────────────────────────────────────────
 
-_SIG = "C'est beau. C'est rare. C'est Autoradar."
+_SIG = "Une perle rare dans un océan de ferraille. La machine a parlé. C'est Autoradar."
 
 
 def test_build_user_message_contains_car_info():
