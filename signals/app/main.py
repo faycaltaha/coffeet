@@ -20,6 +20,7 @@ from .database import get_db, init_db
 from .correlation import detect_active_patterns
 from .models import (
     Alert,
+    AlertAuditLog,
     CollectorStatus,
     CorrelationResult,
     Crisis,
@@ -31,12 +32,15 @@ from .models import (
     SignalPattern,
 )
 from .schemas import (
+    AlertAuditLogOut,
     AlertOut,
+    AlertStatsOut,
     CollectorStatusOut,
     CorrelationResultOut,
     CrisisDetail,
     CrisisOut,
     CrisisSignalLinkOut,
+    OutcomeUpdate,
     OverviewOut,
     PatternMatchOut,
     RegionScoreOut,
@@ -521,6 +525,105 @@ async def get_region_risk(
         )
         for r in rows
     ]
+
+
+# ── Alert Audit Log ────────────────────────────────────────────────────────
+
+
+@app.get("/api/alert-log", response_model=list[AlertAuditLogOut])
+async def list_alert_log(
+    decision: str | None = None,
+    outcome: str | None = None,
+    region: str | None = None,
+    limit: int = Query(default=100, le=500),
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    query = select(AlertAuditLog).order_by(AlertAuditLog.created_at.desc()).limit(limit)
+    if decision:
+        query = query.where(AlertAuditLog.decision == decision)
+    if outcome:
+        query = query.where(AlertAuditLog.outcome == outcome)
+    if region:
+        query = query.where(AlertAuditLog.region == region)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@app.get("/api/alert-log/stats", response_model=AlertStatsOut)
+async def alert_stats(
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    all_logs = await db.execute(select(AlertAuditLog))
+    logs = all_logs.scalars().all()
+
+    fired = [l for l in logs if l.decision == "fired"]
+    suppressed = [l for l in logs if l.decision == "suppressed_dedup"]
+    below = [l for l in logs if l.decision == "below_threshold"]
+    pending = [l for l in fired if l.outcome == "pending"]
+    tp = [l for l in fired if l.outcome == "true_positive"]
+    fp = [l for l in fired if l.outcome == "false_positive"]
+
+    resolved = len(tp) + len(fp)
+    precision = len(tp) / resolved if resolved > 0 else None
+    fire_rate = len(fired) / len(logs) if logs else None
+    avg_fired = sum(l.score_value for l in fired) / len(fired) if fired else None
+    avg_below = sum(l.score_value for l in below) / len(below) if below else None
+
+    by_severity: dict[str, dict[str, int]] = {}
+    for l in fired:
+        sev = l.severity
+        if sev not in by_severity:
+            by_severity[sev] = {"fired": 0, "true_positive": 0, "false_positive": 0, "pending": 0}
+        by_severity[sev]["fired"] += 1
+        if l.outcome in by_severity[sev]:
+            by_severity[sev][l.outcome] += 1
+
+    by_region: dict[str, dict[str, int]] = {}
+    for l in fired:
+        r = l.region or "unknown"
+        if r not in by_region:
+            by_region[r] = {"fired": 0, "true_positive": 0, "false_positive": 0, "pending": 0}
+        by_region[r]["fired"] += 1
+        if l.outcome and l.outcome in by_region[r]:
+            by_region[r][l.outcome] += 1
+
+    return AlertStatsOut(
+        total_evaluated=len(logs),
+        total_fired=len(fired),
+        total_suppressed_dedup=len(suppressed),
+        total_below_threshold=len(below),
+        pending_outcome=len(pending),
+        true_positives=len(tp),
+        false_positives=len(fp),
+        precision=round(precision, 3) if precision is not None else None,
+        fire_rate=round(fire_rate, 3) if fire_rate is not None else None,
+        avg_score_fired=round(avg_fired, 1) if avg_fired is not None else None,
+        avg_score_below=round(avg_below, 1) if avg_below is not None else None,
+        by_severity=by_severity,
+        by_region=by_region,
+    )
+
+
+@app.patch("/api/alert-log/{log_id}/outcome")
+async def update_outcome(
+    log_id: int,
+    body: OutcomeUpdate,
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(verify_api_key),
+):
+    if body.outcome not in ("true_positive", "false_positive", "inconclusive"):
+        raise HTTPException(status_code=400, detail="outcome must be true_positive, false_positive, or inconclusive")
+    result = await db.execute(select(AlertAuditLog).where(AlertAuditLog.id == log_id))
+    log = result.scalar_one_or_none()
+    if not log:
+        raise HTTPException(status_code=404, detail="Audit log entry not found")
+    log.outcome = body.outcome
+    log.outcome_notes = body.notes
+    log.outcome_updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"ok": True, "id": log_id, "outcome": body.outcome}
 
 
 # ── Static files ────────────────────────────────────────────────────────────

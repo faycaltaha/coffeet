@@ -223,3 +223,35 @@ class RiskAssessment(Base):
         Index("ix_risk_region_crisis", "region", "crisis_type"),
     )
 
+
+class AlertAuditLog(Base):
+    __tablename__ = "alert_audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    alert_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("alerts.id"), nullable=True
+    )
+    alert_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    region: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    score_value: Mapped[float] = mapped_column(Float, nullable=False)
+    threshold_value: Mapped[float] = mapped_column(Float, nullable=False)
+    categories_active: Mapped[int] = mapped_column(Integer, default=0)
+    categories_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decision: Mapped[str] = mapped_column(String(30), nullable=False)
+    outcome: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    outcome_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    outcome_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    __table_args__ = (
+        Index("ix_audit_decision", "decision"),
+        Index("ix_audit_outcome", "outcome"),
+        Index("ix_audit_created", "created_at"),
+    )
+

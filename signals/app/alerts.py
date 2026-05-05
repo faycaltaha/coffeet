@@ -11,7 +11,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import REGION_ALERT_CRITICAL, REGION_ALERT_HIGH, SECTOR_SPIKE_THRESHOLD
-from .models import Alert, RegionScore, SectorScore
+from .models import Alert, AlertAuditLog, RegionScore, SectorScore
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ async def _has_recent_alert(
 
 
 async def evaluate_alerts(db: AsyncSession) -> int:
-    """Evaluate latest scores and generate alerts. Returns count created."""
+    """Evaluate latest scores, generate alerts, and audit-log every decision."""
     now = datetime.now(timezone.utc)
     created = 0
 
@@ -58,52 +58,88 @@ async def evaluate_alerts(db: AsyncSession) -> int:
 
         for rs in region_scores:
             if rs.score >= REGION_ALERT_CRITICAL:
-                if not await _has_recent_alert(
-                    db, "region_risk", rs.region, None
-                ):
-                    db.add(Alert(
-                        alert_type="region_risk",
-                        severity="critical",
-                        title=(
-                            f"CRITICAL risk: {rs.region} "
-                            f"(score {rs.score:.0f})"
-                        ),
+                dedup = await _has_recent_alert(db, "region_risk", rs.region, None)
+                if dedup:
+                    db.add(AlertAuditLog(
+                        alert_type="region_risk", severity="critical",
+                        region=rs.region, score_value=rs.score,
+                        threshold_value=REGION_ALERT_CRITICAL,
+                        categories_active=rs.signal_count,
+                        categories_json=rs.top_signals_json,
+                        decision="suppressed_dedup",
+                    ))
+                else:
+                    alert = Alert(
+                        alert_type="region_risk", severity="critical",
+                        title=f"CRITICAL risk: {rs.region} (score {rs.score:.0f})",
                         description=(
                             f"Region {rs.region} composite score reached "
                             f"{rs.score:.1f}, exceeding critical threshold "
                             f"of {REGION_ALERT_CRITICAL}. "
                             f"{rs.signal_count} signals contributing."
                         ),
-                        region=rs.region,
-                        score_value=rs.score,
+                        region=rs.region, score_value=rs.score,
                         threshold_value=REGION_ALERT_CRITICAL,
                         related_signals_json=rs.top_signals_json,
+                    )
+                    db.add(alert)
+                    await db.flush()
+                    db.add(AlertAuditLog(
+                        alert_id=alert.id, alert_type="region_risk",
+                        severity="critical", region=rs.region,
+                        score_value=rs.score,
+                        threshold_value=REGION_ALERT_CRITICAL,
+                        categories_active=rs.signal_count,
+                        categories_json=rs.top_signals_json,
+                        decision="fired", outcome="pending",
                     ))
                     created += 1
 
             elif rs.score >= REGION_ALERT_HIGH:
-                if not await _has_recent_alert(
-                    db, "region_risk", rs.region, None
-                ):
-                    db.add(Alert(
-                        alert_type="region_risk",
-                        severity="high",
-                        title=(
-                            f"High risk: {rs.region} "
-                            f"(score {rs.score:.0f})"
-                        ),
+                dedup = await _has_recent_alert(db, "region_risk", rs.region, None)
+                if dedup:
+                    db.add(AlertAuditLog(
+                        alert_type="region_risk", severity="high",
+                        region=rs.region, score_value=rs.score,
+                        threshold_value=REGION_ALERT_HIGH,
+                        categories_active=rs.signal_count,
+                        categories_json=rs.top_signals_json,
+                        decision="suppressed_dedup",
+                    ))
+                else:
+                    alert = Alert(
+                        alert_type="region_risk", severity="high",
+                        title=f"High risk: {rs.region} (score {rs.score:.0f})",
                         description=(
                             f"Region {rs.region} composite score reached "
                             f"{rs.score:.1f}, exceeding high threshold "
                             f"of {REGION_ALERT_HIGH}. "
                             f"{rs.signal_count} signals contributing."
                         ),
-                        region=rs.region,
-                        score_value=rs.score,
+                        region=rs.region, score_value=rs.score,
                         threshold_value=REGION_ALERT_HIGH,
                         related_signals_json=rs.top_signals_json,
+                    )
+                    db.add(alert)
+                    await db.flush()
+                    db.add(AlertAuditLog(
+                        alert_id=alert.id, alert_type="region_risk",
+                        severity="high", region=rs.region,
+                        score_value=rs.score,
+                        threshold_value=REGION_ALERT_HIGH,
+                        categories_active=rs.signal_count,
+                        categories_json=rs.top_signals_json,
+                        decision="fired", outcome="pending",
                     ))
                     created += 1
+            else:
+                db.add(AlertAuditLog(
+                    alert_type="region_risk", severity="low",
+                    region=rs.region, score_value=rs.score,
+                    threshold_value=REGION_ALERT_HIGH,
+                    categories_active=rs.signal_count,
+                    decision="below_threshold",
+                ))
 
     latest_sector_calc = await db.execute(
         select(func.max(SectorScore.calculated_at))
@@ -137,30 +173,42 @@ async def evaluate_alerts(db: AsyncSession) -> int:
             if prev_score is not None:
                 spike = ss.score - prev_score
                 if spike >= SECTOR_SPIKE_THRESHOLD:
-                    if not await _has_recent_alert(
-                        db, "sector_spike", None, ss.sector
-                    ):
-                        db.add(Alert(
-                            alert_type="sector_spike",
-                            severity="high",
-                            title=(
-                                f"Sector spike: {ss.sector} "
-                                f"(+{spike:.0f} points)"
-                            ),
+                    dedup = await _has_recent_alert(db, "sector_spike", None, ss.sector)
+                    if dedup:
+                        db.add(AlertAuditLog(
+                            alert_type="sector_spike", severity="high",
+                            sector=ss.sector, score_value=ss.score,
+                            threshold_value=SECTOR_SPIKE_THRESHOLD,
+                            decision="suppressed_dedup",
+                        ))
+                    else:
+                        alert = Alert(
+                            alert_type="sector_spike", severity="high",
+                            title=f"Sector spike: {ss.sector} (+{spike:.0f} points)",
                             description=(
                                 f"Sector {ss.sector} score jumped from "
                                 f"{prev_score:.1f} to {ss.score:.1f} "
                                 f"({spike:+.1f}) in 24 hours."
                             ),
-                            sector=ss.sector,
-                            score_value=ss.score,
+                            sector=ss.sector, score_value=ss.score,
                             threshold_value=SECTOR_SPIKE_THRESHOLD,
                             related_signals_json=ss.top_signals_json,
+                        )
+                        db.add(alert)
+                        await db.flush()
+                        db.add(AlertAuditLog(
+                            alert_id=alert.id, alert_type="sector_spike",
+                            severity="high", sector=ss.sector,
+                            score_value=ss.score,
+                            threshold_value=SECTOR_SPIKE_THRESHOLD,
+                            decision="fired", outcome="pending",
                         ))
                         created += 1
 
     if created:
         await db.commit()
         logger.info("Created %d new alerts", created)
+    else:
+        await db.commit()
 
     return created

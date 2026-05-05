@@ -184,6 +184,46 @@ class RiskAssessmentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AlertAuditLogOut(BaseModel):
+    id: int
+    alert_id: int | None
+    alert_type: str
+    severity: str
+    region: str | None
+    sector: str | None
+    score_value: float
+    threshold_value: float
+    categories_active: int
+    decision: str
+    outcome: str | None
+    outcome_notes: str | None
+    outcome_updated_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AlertStatsOut(BaseModel):
+    total_evaluated: int
+    total_fired: int
+    total_suppressed_dedup: int
+    total_below_threshold: int
+    pending_outcome: int
+    true_positives: int
+    false_positives: int
+    precision: float | None
+    fire_rate: float | None
+    avg_score_fired: float | None
+    avg_score_below: float | None
+    by_severity: dict[str, dict[str, int]]
+    by_region: dict[str, dict[str, int]]
+
+
+class OutcomeUpdate(BaseModel):
+    outcome: str
+    notes: str | None = None
+
+
 class RiskAssessmentDetail(BaseModel):
     region: str
     crisis_type: str
